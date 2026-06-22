@@ -14,10 +14,13 @@ describe('App', () => {
     expect(app).toBeTruthy();
   });
 
-  it('should render title', async () => {
+  it('should render the builder shell', async () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('h1')?.textContent).toContain('Hello, br-resume');
+    expect(compiled.querySelector('h1')?.textContent).toContain('BUILD YOUR RESUME');
+    expect(compiled.querySelectorAll('.panel').length).toBe(2);
+    expect(compiled.textContent).toContain('Template gallery');
+    expect(compiled.textContent).toContain('ATS checker');
   });
 });
