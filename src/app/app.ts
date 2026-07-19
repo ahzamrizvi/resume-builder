@@ -103,6 +103,7 @@ type DrawerItem = {
 type WorkspaceState = {
   profiles: ResumeProfile[];
   activeProfileId: string;
+  activeScreen: 'list' | 'editor';
 };
 
 const STORAGE_KEY = 'br-resume-state';
@@ -241,6 +242,9 @@ export class App implements OnInit {
   protected dragArmedSection: SectionKey | null = null;
   protected importError = '';
   protected lastSavedLabel = '';
+  protected saveToastMessage = '';
+  protected isSaveToastVisible = false;
+  private saveToastTimer: ReturnType<typeof setTimeout> | null = null;
   protected isDrawerSettingsOpen = false;
   protected readonly drawerItems: DrawerItem[] = [
     { label: 'Dark Mode', icon: 'moon', action: 'toggle-theme' },
@@ -353,7 +357,7 @@ export class App implements OnInit {
     return this.profiles.length > 0;
   }
 
-  protected persistState(): void {
+  protected persistState(statusLabel?: string): void {
     this.updateDerivedState();
 
     if (!this.browser) {
@@ -368,12 +372,16 @@ export class App implements OnInit {
     }
 
     this.saveWorkspace();
-    this.lastSavedLabel = activeProfile ? `${this.activeProfileLabel} saved locally` : '';
+    this.lastSavedLabel = activeProfile ? statusLabel ?? `${this.activeProfileLabel} saved locally` : '';
+    if (statusLabel) {
+      this.showSaveToast(statusLabel);
+    }
   }
 
   protected openResumeList(): void {
     this.persistState();
     this.activeScreen = 'list';
+    this.saveWorkspace();
     this.closeHeaderMenu();
   }
 
@@ -573,6 +581,7 @@ export class App implements OnInit {
     this.activeProfileNameDraft = profile.name;
     this.activeScreen = 'editor';
     this.persistState();
+    this.showSaveToast('New resume saved');
   }
 
   protected createFirstResume(): void {
@@ -716,6 +725,21 @@ export class App implements OnInit {
     this.persistState();
   }
 
+  private showSaveToast(message: string): void {
+    this.saveToastMessage = message;
+    this.isSaveToastVisible = true;
+
+    if (this.saveToastTimer) {
+      clearTimeout(this.saveToastTimer);
+    }
+
+    this.saveToastTimer = setTimeout(() => {
+      this.isSaveToastVisible = false;
+      this.saveToastMessage = '';
+      this.saveToastTimer = null;
+    }, 2200);
+  }
+
   protected onPhotoSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
@@ -724,13 +748,23 @@ export class App implements OnInit {
       return;
     }
 
+    const previewUrl = URL.createObjectURL(file);
+    this.resume.personal.photoDataUrl = previewUrl;
+
     const reader = new FileReader();
     reader.onload = () => {
+      if (this.resume.personal.photoDataUrl === previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
       this.resume.personal.photoDataUrl = typeof reader.result === 'string' ? reader.result : '';
       this.persistState();
+      input.value = '';
+    };
+    reader.onerror = () => {
+      URL.revokeObjectURL(previewUrl);
+      input.value = '';
     };
     reader.readAsDataURL(file);
-    input.value = '';
   }
 
   protected onSectionDragHandleDown(section: SectionKey): void {
@@ -850,7 +884,7 @@ export class App implements OnInit {
       const activeProfile = this.activeProfile;
       this.resume = activeProfile?.resume ?? this.createDefaultResume();
       this.activeProfileNameDraft = activeProfile?.name ?? '';
-      this.activeScreen = 'list';
+      this.activeScreen = parsed.activeScreen === 'editor' ? 'editor' : 'list';
       this.atsReport = this.buildAtsReport(this.resume);
       this.lastSavedLabel = this.profiles.length ? 'Loaded saved resumes' : '';
     } catch {
@@ -878,6 +912,7 @@ export class App implements OnInit {
     const payload: WorkspaceState = {
       profiles: this.profiles,
       activeProfileId: this.activeProfileId,
+      activeScreen: this.activeScreen,
     };
 
     window.localStorage.setItem(workspaceKey, JSON.stringify(payload));
@@ -1174,7 +1209,7 @@ export class App implements OnInit {
 
       const imgData = canvas.toDataURL('image/png', 1.0);
       doc.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-      doc.save('br-resume.pdf');
+      doc.save(this.buildDownloadFileName());
     } finally {
       if (wrapper?.parentNode) {
         wrapper.parentNode.removeChild(wrapper);
@@ -1188,6 +1223,15 @@ export class App implements OnInit {
     const clone = source.cloneNode(true) as HTMLElement;
     this.copyComputedStyles(source, clone);
     return clone;
+  }
+
+  private buildDownloadFileName(): string {
+    const parts = [this.resume.personal.firstName, this.resume.personal.surname]
+      .map((part) => part.trim())
+      .filter(Boolean);
+    const baseName = parts.length ? parts.join(' ') : 'Untitled';
+
+    return `${baseName.replace(/[^a-zA-Z0-9-_ ]/g, '').trim().replace(/\s+/g, '_') || 'Untitled'}.pdf`;
   }
 
   private copyComputedStyles(source: Element, target: Element): void {

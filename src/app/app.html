@@ -131,6 +131,7 @@
 </main>
 
 <main class="shell" *ngIf="activeScreen === 'editor'" [ngClass]="themeClass" [ngStyle]="accentStyle">
+  <div class="save-toast" *ngIf="isSaveToastVisible">{{ saveToastMessage }}</div>
   <section class="panel editor">
     <header class="panel-header">
       <div class="title-row">
@@ -139,8 +140,8 @@
           <p class="lede">Edit once, switch templates, and keep the whole profile in sync.</p>
         </div>
         <div class="editor-actions">
-          <button type="button" class="ghost" (click)="openResumeList()">Back to resumes</button>
-          <button type="button" class="ghost" (click)="persistState()">Save resume</button>
+          <button type="button" class="ghost back-home-btn" (click)="openResumeList()">Back to Home</button>
+          <button type="button" class="ghost" (click)="persistState('Resume saved')">Save resume</button>
         </div>
       </div>
     </header>
