@@ -1969,7 +1969,7 @@ textarea:focus {
   width: 794px;
   max-width: 794px;
   min-height: 1123px;
-  padding: 24px 26px 28px;
+  padding: 10px 12px 12px;
   font-size: 13px;
   line-height: 1.38;
 }
@@ -2012,7 +2012,7 @@ textarea:focus {
 
 .pdf-export .resume-main,
 .pdf-export .resume-sidebar {
-  padding: 18px;
+  padding: 12px;
 }
 
 .pdf-export .preview-section h3 {

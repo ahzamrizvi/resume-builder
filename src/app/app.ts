@@ -1076,10 +1076,10 @@ export class App implements OnInit {
 
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
-      const marginX = 24;
-      const marginY = 24;
-      const contentWidth = pageWidth - marginX * 2;
-      const contentHeight = pageHeight - marginY * 2;
+      const marginX = 0;
+      const marginY = 0;
+      const contentWidth = pageWidth;
+      const contentHeight = pageHeight;
       const pageTargets = Array.from(exportRoot.querySelectorAll('.preview-page')) as HTMLElement[];
       const fallbackTarget = (exportRoot.querySelector('.resume-card') as HTMLElement | null) ?? exportRoot;
       const targets = pageTargets.length ? pageTargets : [fallbackTarget];
