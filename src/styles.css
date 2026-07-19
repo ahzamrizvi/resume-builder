@@ -1969,7 +1969,8 @@ textarea:focus {
   width: 794px;
   max-width: 794px;
   min-height: 1123px;
-  padding: 10px 12px 12px;
+  padding: 14px 14px 12px;
+  border-top: 4px solid var(--accent);
   font-size: 13px;
   line-height: 1.38;
 }
