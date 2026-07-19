@@ -1,64 +1,44 @@
 # BrResume
 
-BrResume is an Angular-based resume builder. It lets you edit resume content in the browser, switch between multiple layouts, reorder sections, and export the finished result as a PDF.
+BrResume is an Angular-based resume builder. It lets you edit resume content in the browser, switch templates, reorder sections, and export the result as a PDF.
 
-## Features
+## Setup Instructions
 
-- Multiple resume templates, including single-column and split-layout variants
-- Light and dark themes
-- Drag-and-drop section ordering
-- Local persistence in `localStorage`
-- Profile photo upload and removal
-- PDF export from the rendered preview
-- Basic ATS-oriented scoring and warnings
+1. Install dependencies: `npm install`
+2. Start the app: `npm start`
+3. Open `http://localhost:4200/`
+4. Build for production: `npm run build`
+5. Run tests: `npm test`
 
-## Prerequisites
+## AI Tools Used
 
-- Node.js and npm
+- OpenCode, powered by `gpt-5.4-mini`
 
-## Install
+## Where AI Helped
 
-```bash
-npm install
-```
+- Refactoring shared resume and storage types into dedicated files
+- Moving browser persistence logic into a service
+- Cleaning up `app.ts` by removing duplicated auth and storage helpers
+- Updating the README structure and wording
 
-## Development
+## What I Implemented Myself
 
-Start the local dev server:
+- The resume builder UI and editor flow
+- Template switching, theming, and section ordering behavior
+- PDF export and photo upload handling
+- Local persistence for users, sessions, and resume workspaces
+- The final integration and verification of the refactor
 
-```bash
-npm start
-```
+## Challenges Faced
 
-Open the app at `http://localhost:4200/`.
+- The main component had grown large, so separating shared logic without breaking behavior took care
+- LocalStorage state had to stay compatible while moving code into a service
+- The build produced CommonJS warnings from PDF-related dependencies, which are noisy but non-blocking
 
-## Build
+## If I Had More Time
 
-```bash
-npm run build
-```
-
-## Test
-
-```bash
-npm test
-```
-
-## SSR preview
-
-If you build the server bundle, you can run the SSR entry point with:
-
-```bash
-npm run serve:ssr:br-resume
-```
-
-## Project structure
-
-- `src/app/` - main resume builder UI and behavior
-- `src/server.ts` - SSR server entry point
-- `public/` - static assets
-
-## Notes
-
-- Resume data is stored locally in the browser and restored on reload.
-- PDF export captures the rendered preview, so the output matches the current theme and template.
+- Add automated tests around auth, workspace restore, and resume normalization
+- Reduce the remaining logic in `app.ts` by splitting it into smaller feature services
+- Improve accessibility and keyboard navigation across the editor
+- Add import/export for saved resume data
+- Remove or replace the CommonJS dependencies that trigger build warnings

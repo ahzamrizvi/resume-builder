@@ -2,131 +2,31 @@ import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { Component, HostListener, inject, OnInit, PLATFORM_ID } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
-type ThemeMode = 'light' | 'dark';
-const TEMPLATE_KEYS = [
-  'classic',
-  'modern',
-  'right-side',
-  'executive',
-  'creative',
-  'balanced',
-  'right-side-pro',
-  'academic',
-  'minimalist',
-  'portfolio',
-] as const;
-type TemplateKey = (typeof TEMPLATE_KEYS)[number];
-type SectionKey = 'personal' | 'summary' | 'experience' | 'projects' | 'education' | 'skills';
-
-type ExperienceEntry = {
-  company: string;
-  position: string;
-  period: string;
-  highlights: string;
-};
-
-type EducationEntry = {
-  school: string;
-  degree: string;
-  year: string;
-};
-
-type ProjectEntry = {
-  name: string;
-  description: string;
-  link: string;
-  technologiesUsed: string;
-};
-
-type PersonalDetails = {
-  firstName: string;
-  surname: string;
-  role: string;
-  email: string;
-  phone: string;
-  location: string;
-  linkedin: string;
-  github: string;
-  photoDataUrl: string;
-};
-
-type ResumeState = {
-  personal: PersonalDetails;
-  summary: string;
-  experience: ExperienceEntry[];
-  education: EducationEntry[];
-  projects: ProjectEntry[];
-  skills: string;
-  template: TemplateKey;
-  theme: ThemeMode;
-  accentColor: string;
-  sidebarColor: string;
-  sectionOrder: SectionKey[];
-};
-
-type AtsReport = {
-  score: number;
-  verdict: string;
-  strengths: string[];
-  warnings: string[];
-};
-
-type UserSession = {
-  username: string;
-  displayName: string;
-};
-
-type AuthMode = 'sign-in' | 'sign-up';
-
-type AuthUserRecord = {
-  username: string;
-  email: string;
-  password: string;
-  displayName: string;
-  createdAt: string;
-};
-
-type ResumeProfile = {
-  id: string;
-  name: string;
-  createdAt: string;
-  updatedAt: string;
-  resume: ResumeState;
-};
-
-type DrawerItem = {
-  label: string;
-  icon: 'moon' | 'list' | 'logout';
-  action: 'close' | 'go-to-list' | 'create-profile' | 'download' | 'toggle-theme' | 'switch-profile' | 'logout';
-};
-
-type WorkspaceState = {
-  profiles: ResumeProfile[];
-  activeProfileId: string;
-  activeScreen: 'list' | 'editor';
-};
+import {
+  AuthMode,
+  AuthUserRecord,
+  AtsReport,
+  DEFAULT_ACCENT_COLOR,
+  DEFAULT_SIDEBAR_COLOR,
+  DrawerItem,
+  EducationEntry,
+  ExperienceEntry,
+  PersonalDetails,
+  ProjectEntry,
+  ResumeProfile,
+  ResumeState,
+  SECTION_ORDER,
+  SectionKey,
+  TEMPLATE_KEYS,
+  TemplateKey,
+  ThemeMode,
+  TWO_SIDE_TEMPLATES,
+  UserSession,
+  WorkspaceState,
+} from './models/resume.models';
+import { ResumeStorageService } from './services/resume-storage.service';
 
 const STORAGE_KEY = 'br-resume-state';
-const WORKSPACE_KEY = 'br-resume-workspace';
-const USERS_KEY = 'br-resume-users';
-const SESSION_KEY = 'br-resume-session';
-const SECTION_ORDER: SectionKey[] = [
-  'personal',
-  'summary',
-  'experience',
-  'projects',
-  'education',
-  'skills',
-];
-const TWO_SIDE_TEMPLATES: TemplateKey[] = [
-  'right-side',
-  'right-side-pro',
-  'executive',
-  'academic',
-  'portfolio',
-];
-const DEFAULT_ACCENT_COLOR = '#4f46e5';
-const DEFAULT_SIDEBAR_COLOR = '#cbd5e1';
 
 @Component({
   selector: 'app-root',
@@ -137,6 +37,7 @@ const DEFAULT_SIDEBAR_COLOR = '#cbd5e1';
 export class App implements OnInit {
   private readonly platformId = inject(PLATFORM_ID);
   private readonly browser = isPlatformBrowser(this.platformId);
+  private readonly resumeStorage = inject(ResumeStorageService);
 
   protected readonly title = 'BUILD YOUR RESUME';
   protected readonly templateOptions: Array<{
@@ -470,7 +371,7 @@ export class App implements OnInit {
       return;
     }
 
-    const users = this.loadUsers();
+    const users = this.resumeStorage.loadUsers();
     const existingUser = users.find(
       (user) => user.username === identifier || user.email === identifier,
     );
@@ -504,7 +405,7 @@ export class App implements OnInit {
       return;
     }
 
-    const users = this.loadUsers();
+    const users = this.resumeStorage.loadUsers();
     const existingUser = users.find(
       (user) => user.username === username || user.email === email,
     );
@@ -514,14 +415,14 @@ export class App implements OnInit {
       return;
     }
 
-    const newUser = this.createUserRecord(
+    const newUser = this.resumeStorage.createUserRecord(
       username,
       email,
       password,
-      this.createDisplayName(username),
+      this.resumeStorage.createDisplayName(username),
     );
     users.push(newUser);
-    this.saveUsers(users);
+    this.resumeStorage.saveUsers(users);
     this.lastSavedLabel = 'Created a new local account';
 
     this.finishAuth(newUser);
@@ -546,9 +447,7 @@ export class App implements OnInit {
     this.currentUser = authenticatedUser;
     this.authError = '';
 
-    if (this.browser) {
-      window.localStorage.setItem(SESSION_KEY, JSON.stringify(this.currentUser));
-    }
+    this.resumeStorage.saveSession(this.currentUser);
 
     this.restoreWorkspace();
     this.updateDerivedState();
@@ -565,16 +464,17 @@ export class App implements OnInit {
     this.atsReport = this.buildAtsReport(this.resume);
     this.authMode = 'sign-in';
 
-    if (this.browser) {
-      window.localStorage.removeItem(SESSION_KEY);
-    }
+    this.resumeStorage.clearSession();
     this.loginPassword = '';
     this.loginEmail = '';
     this.loginConfirmPassword = '';
   }
 
   protected createProfile(): void {
-    const profile = this.createResumeProfile(`Resume ${this.profiles.length + 1}`, this.createDefaultResume());
+    const profile = this.resumeStorage.createResumeProfile(
+      `Resume ${this.profiles.length + 1}`,
+      this.createDefaultResume(),
+    );
     this.profiles = [...this.profiles, profile];
     this.activeProfileId = profile.id;
     this.resume = profile.resume;
@@ -821,29 +721,22 @@ export class App implements OnInit {
       return;
     }
 
-    const saved = window.localStorage.getItem(SESSION_KEY);
+    const saved = this.resumeStorage.loadSession();
     if (!saved) {
       return;
     }
 
-    try {
-      const parsed = JSON.parse(saved) as Partial<UserSession>;
-      if (typeof parsed.username === 'string' && parsed.username) {
-        const users = this.loadUsers();
-        const user = users.find((entry) => entry.username === parsed.username);
+    const users = this.resumeStorage.loadUsers();
+    const user = users.find((entry) => entry.username === saved.username);
 
-        if (user) {
-          this.currentUser = {
-            username: user.username,
-            displayName: user.displayName,
-          };
-          this.isAuthenticated = true;
-        } else {
-          window.localStorage.removeItem(SESSION_KEY);
-        }
-      }
-    } catch {
-      window.localStorage.removeItem(SESSION_KEY);
+    if (user) {
+      this.currentUser = {
+        username: user.username,
+        displayName: user.displayName,
+      };
+      this.isAuthenticated = true;
+    } else {
+      this.resumeStorage.clearSession();
     }
   }
 
@@ -852,12 +745,11 @@ export class App implements OnInit {
       return;
     }
 
-    const workspaceKey = this.getWorkspaceKey();
-    if (!workspaceKey) {
+    if (!this.currentUser?.username) {
       return;
     }
 
-    const saved = window.localStorage.getItem(workspaceKey);
+    const saved = this.resumeStorage.loadWorkspace(this.currentUser.username);
     if (!saved) {
       this.profiles = [];
       this.activeProfileId = '';
@@ -869,26 +761,12 @@ export class App implements OnInit {
       return;
     }
 
-    try {
-      const parsed = JSON.parse(saved) as Partial<WorkspaceState>;
-      this.profiles = Array.isArray(parsed.profiles)
-        ? parsed.profiles
-            .map((profile) => this.normalizeProfile(profile))
-            .filter((profile): profile is ResumeProfile => profile !== null)
-        : [];
-      this.activeProfileId =
-        typeof parsed.activeProfileId === 'string' &&
-        this.profiles.some((profile) => profile.id === parsed.activeProfileId)
-          ? parsed.activeProfileId
-          : this.profiles[0]?.id ?? '';
-      const activeProfile = this.activeProfile;
-      this.resume = activeProfile?.resume ?? this.createDefaultResume();
-      this.activeProfileNameDraft = activeProfile?.name ?? '';
-      this.activeScreen = parsed.activeScreen === 'editor' ? 'editor' : 'list';
-      this.atsReport = this.buildAtsReport(this.resume);
-      this.lastSavedLabel = this.profiles.length ? 'Loaded saved resumes' : '';
-    } catch {
-      window.localStorage.removeItem(workspaceKey);
+    if (!Array.isArray(saved.profiles)) {
+      this.resumeStorage.saveWorkspace(this.currentUser.username, {
+        profiles: [],
+        activeProfileId: '',
+        activeScreen: 'list',
+      });
       this.profiles = [];
       this.activeProfileId = '';
       this.activeProfileNameDraft = '';
@@ -896,7 +774,23 @@ export class App implements OnInit {
       this.activeScreen = 'list';
       this.atsReport = this.buildAtsReport(this.resume);
       this.lastSavedLabel = '';
+      return;
     }
+
+    this.profiles = saved.profiles
+      .map((profile) => this.normalizeProfile(profile))
+      .filter((profile): profile is ResumeProfile => profile !== null);
+    this.activeProfileId =
+      typeof saved.activeProfileId === 'string' &&
+      this.profiles.some((profile) => profile.id === saved.activeProfileId)
+        ? saved.activeProfileId
+        : this.profiles[0]?.id ?? '';
+    const activeProfile = this.activeProfile;
+    this.resume = activeProfile?.resume ?? this.createDefaultResume();
+    this.activeProfileNameDraft = activeProfile?.name ?? '';
+    this.activeScreen = saved.activeScreen === 'editor' ? 'editor' : 'list';
+    this.atsReport = this.buildAtsReport(this.resume);
+    this.lastSavedLabel = this.profiles.length ? 'Loaded saved resumes' : '';
   }
 
   private saveWorkspace(): void {
@@ -904,8 +798,7 @@ export class App implements OnInit {
       return;
     }
 
-    const workspaceKey = this.getWorkspaceKey();
-    if (!workspaceKey) {
+    if (!this.currentUser?.username) {
       return;
     }
 
@@ -915,123 +808,7 @@ export class App implements OnInit {
       activeScreen: this.activeScreen,
     };
 
-    window.localStorage.setItem(workspaceKey, JSON.stringify(payload));
-  }
-
-  private getWorkspaceKey(): string {
-    return this.currentUser?.username ? `${WORKSPACE_KEY}:${this.currentUser.username}` : '';
-  }
-
-  private loadUsers(): AuthUserRecord[] {
-    if (!this.browser) {
-      return [];
-    }
-
-    const saved = window.localStorage.getItem(USERS_KEY);
-    if (!saved) {
-      return [];
-    }
-
-    try {
-      const parsed = JSON.parse(saved) as unknown;
-      return Array.isArray(parsed)
-        ? parsed
-            .map((item) => this.normalizeUserRecord(item))
-            .filter((item): item is AuthUserRecord => item !== null)
-        : [];
-    } catch {
-      return [];
-    }
-  }
-
-  private saveUsers(users: AuthUserRecord[]): void {
-    if (!this.browser) {
-      return;
-    }
-
-    window.localStorage.setItem(USERS_KEY, JSON.stringify(users));
-  }
-
-  private normalizeUserRecord(value: unknown): AuthUserRecord | null {
-    if (!value || typeof value !== 'object') {
-      return null;
-    }
-
-    const candidate = value as Partial<AuthUserRecord>;
-    if (
-      typeof candidate.username !== 'string' ||
-      typeof candidate.password !== 'string' ||
-      typeof candidate.displayName !== 'string' ||
-      typeof candidate.createdAt !== 'string'
-    ) {
-      return null;
-    }
-
-    return {
-      username: candidate.username,
-      email:
-        typeof candidate.email === 'string' && candidate.email.trim()
-          ? candidate.email
-          : candidate.username,
-      password: candidate.password,
-      displayName: candidate.displayName,
-      createdAt: candidate.createdAt,
-    };
-  }
-
-  private createUserRecord(
-    username: string,
-    email: string,
-    password: string,
-    displayName: string,
-  ): AuthUserRecord {
-    return {
-      username,
-      email,
-      password,
-      displayName,
-      createdAt: new Date().toISOString(),
-    };
-  }
-
-  private createDisplayName(username: string): string {
-    const localPart = username.split('@')[0] || username;
-    return localPart
-      .split(/[._-]/)
-      .filter(Boolean)
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(' ');
-  }
-
-  private createResumeProfile(name: string, resume: ResumeState): ResumeProfile {
-    const now = new Date().toISOString();
-    return {
-      id: this.createId(),
-      name,
-      createdAt: now,
-      updatedAt: now,
-      resume,
-    };
-  }
-
-  private normalizeProfile(value: unknown): ResumeProfile | null {
-    if (!value || typeof value !== 'object') {
-      return null;
-    }
-
-    const candidate = value as Partial<ResumeProfile>;
-    return {
-      id: typeof candidate.id === 'string' ? candidate.id : this.createId(),
-      name: typeof candidate.name === 'string' && candidate.name.trim() ? candidate.name : 'Resume',
-      createdAt:
-        typeof candidate.createdAt === 'string' ? candidate.createdAt : new Date().toISOString(),
-      updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : new Date().toISOString(),
-      resume: this.normalizeImportedState(candidate.resume),
-    };
-  }
-
-  private createId(): string {
-    return typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    this.resumeStorage.saveWorkspace(this.currentUser.username, payload);
   }
 
   private createDefaultResume(): ResumeState {
@@ -1048,6 +825,29 @@ export class App implements OnInit {
       sidebarColor: DEFAULT_SIDEBAR_COLOR,
       sectionOrder: [...SECTION_ORDER],
     };
+  }
+
+  private normalizeProfile(value: unknown): ResumeProfile | null {
+    if (!value || typeof value !== 'object') {
+      return null;
+    }
+
+    const candidate = value as Partial<ResumeProfile>;
+    return {
+      id: typeof candidate.id === 'string' ? candidate.id : this.createId(),
+      name: typeof candidate.name === 'string' && candidate.name.trim() ? candidate.name : 'Resume',
+      createdAt:
+        typeof candidate.createdAt === 'string' ? candidate.createdAt : new Date().toISOString(),
+      updatedAt:
+        typeof candidate.updatedAt === 'string' ? candidate.updatedAt : new Date().toISOString(),
+      resume: this.normalizeImportedState(candidate.resume),
+    };
+  }
+
+  private createId(): string {
+    return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
 
   private normalizeImportedState(raw: unknown): ResumeState {
