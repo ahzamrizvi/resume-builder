@@ -20,7 +20,7 @@ describe('App', () => {
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.textContent).toContain('Local authentication');
-    expect(compiled.textContent).toContain('Sign in');
+    expect(compiled.textContent).toContain('Login');
     expect(compiled.textContent).toContain('Sign up');
   });
 

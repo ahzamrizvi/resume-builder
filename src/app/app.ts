@@ -1,5 +1,5 @@
 import { CommonModule, isPlatformBrowser } from '@angular/common';
-import { Component, inject, OnInit, PLATFORM_ID } from '@angular/core';
+import { Component, HostListener, inject, OnInit, PLATFORM_ID } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 type ThemeMode = 'light' | 'dark';
@@ -89,8 +89,15 @@ type AuthUserRecord = {
 type ResumeProfile = {
   id: string;
   name: string;
+  createdAt: string;
   updatedAt: string;
   resume: ResumeState;
+};
+
+type DrawerItem = {
+  label: string;
+  icon: 'moon' | 'list' | 'logout';
+  action: 'close' | 'go-to-list' | 'create-profile' | 'download' | 'toggle-theme' | 'switch-profile' | 'logout';
 };
 
 type WorkspaceState = {
@@ -226,12 +233,38 @@ export class App implements OnInit {
   protected profiles: ResumeProfile[] = [];
   protected activeProfileId = '';
   protected activeProfileNameDraft = '';
+  protected isHeaderMenuOpen = false;
+  protected activeScreen: 'list' | 'editor' = 'list';
   protected resume: ResumeState = this.createDefaultResume();
   protected atsReport: AtsReport = this.buildAtsReport(this.resume);
   protected draggingSection: SectionKey | null = null;
   protected dragArmedSection: SectionKey | null = null;
   protected importError = '';
   protected lastSavedLabel = '';
+  protected isDrawerSettingsOpen = false;
+  protected readonly drawerItems: DrawerItem[] = [
+    { label: 'Dark Mode', icon: 'moon', action: 'toggle-theme' },
+    { label: 'All Resume', icon: 'list', action: 'go-to-list' },
+    { label: 'Logout', icon: 'logout', action: 'logout' },
+  ];
+
+  @HostListener('document:click', ['$event'])
+  protected onDocumentClick(event: MouseEvent): void {
+    if (!this.isHeaderMenuOpen) {
+      return;
+    }
+
+    const target = event.target as HTMLElement | null;
+    if (!target) {
+      return;
+    }
+
+    if (target.closest('.header-drawer') || target.closest('.hamburger-btn')) {
+      return;
+    }
+
+    this.closeHeaderMenu();
+  }
 
   ngOnInit(): void {
     if (this.browser) {
@@ -293,6 +326,33 @@ export class App implements OnInit {
     return this.activeProfile?.name || 'Resume profile';
   }
 
+  get currentUserName(): string {
+    return (this.currentUser?.username || '').toLowerCase();
+  }
+
+  get currentUserAvatar(): string {
+    const source = this.currentUser?.username || this.currentUser?.displayName || 'U';
+    return source
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part.charAt(0).toUpperCase())
+      .join('')
+      .slice(0, 2);
+  }
+
+  get themeActionLabel(): string {
+    return this.resume.theme === 'light' ? 'Dark mode' : 'Light mode';
+  }
+
+  get drawerThemeLabel(): string {
+    return this.resume.theme === 'dark' ? 'Light Mode' : 'Dark Mode';
+  }
+
+  get hasProfiles(): boolean {
+    return this.profiles.length > 0;
+  }
+
   protected persistState(): void {
     this.updateDerivedState();
 
@@ -308,7 +368,84 @@ export class App implements OnInit {
     }
 
     this.saveWorkspace();
-    this.lastSavedLabel = `${this.activeProfileLabel} saved locally`;
+    this.lastSavedLabel = activeProfile ? `${this.activeProfileLabel} saved locally` : '';
+  }
+
+  protected openResumeList(): void {
+    this.persistState();
+    this.activeScreen = 'list';
+    this.closeHeaderMenu();
+  }
+
+  protected profileScore(profile: ResumeProfile): number {
+    return this.buildAtsReport(profile.resume).score;
+  }
+
+  protected profileDisplayName(profile: ResumeProfile): string {
+    const fullName = [profile.resume.personal.firstName, profile.resume.personal.surname]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+
+    return fullName || 'Untitled';
+  }
+
+  protected profileScoreClass(profile: ResumeProfile): string {
+    const score = this.profileScore(profile);
+    return score >= 85 ? 'good' : score < 60 ? 'warn' : 'neutral';
+  }
+
+  protected profileStrength(profile: ResumeProfile): string {
+    return `${this.profileScore(profile)}`;
+  }
+
+  protected toggleHeaderMenu(): void {
+    this.isHeaderMenuOpen = !this.isHeaderMenuOpen;
+    if (!this.isHeaderMenuOpen) {
+      this.isDrawerSettingsOpen = false;
+    }
+  }
+
+  protected closeHeaderMenu(): void {
+    this.isHeaderMenuOpen = false;
+    this.isDrawerSettingsOpen = false;
+  }
+
+  protected toggleDrawerSettings(): void {
+    this.isDrawerSettingsOpen = !this.isDrawerSettingsOpen;
+  }
+
+  protected onDrawerItemClick(action: DrawerItem['action']): void {
+    if (action === 'close') {
+      this.closeHeaderMenu();
+      return;
+    }
+
+    if (action === 'create-profile') {
+      this.createProfile();
+      this.closeHeaderMenu();
+      return;
+    }
+
+    if (action === 'go-to-list') {
+      this.openResumeList();
+      return;
+    }
+
+    if (action === 'download') {
+      this.downloadResume();
+      return;
+    }
+
+    if (action === 'logout') {
+      this.logout();
+      this.closeHeaderMenu();
+      return;
+    }
+
+    if (action === 'toggle-theme') {
+      this.toggleTheme();
+    }
   }
 
   protected setAuthMode(mode: AuthMode): void {
@@ -331,7 +468,7 @@ export class App implements OnInit {
     );
 
     if (!existingUser) {
-      this.authError = 'No account found. Switch to sign up to create one.';
+      this.authError = 'User does not exist. Sign up to create an account.';
       return;
     }
 
@@ -415,6 +552,7 @@ export class App implements OnInit {
     this.profiles = [];
     this.activeProfileId = '';
     this.activeProfileNameDraft = '';
+    this.activeScreen = 'list';
     this.resume = this.createDefaultResume();
     this.atsReport = this.buildAtsReport(this.resume);
     this.authMode = 'sign-in';
@@ -433,7 +571,12 @@ export class App implements OnInit {
     this.activeProfileId = profile.id;
     this.resume = profile.resume;
     this.activeProfileNameDraft = profile.name;
+    this.activeScreen = 'editor';
     this.persistState();
+  }
+
+  protected createFirstResume(): void {
+    this.createProfile();
   }
 
   protected selectProfile(profileId: string): void {
@@ -448,6 +591,34 @@ export class App implements OnInit {
     this.resume = profile.resume;
     this.activeProfileNameDraft = profile.name;
     this.atsReport = this.buildAtsReport(this.resume);
+    this.activeScreen = 'editor';
+    this.saveWorkspace();
+  }
+
+  protected deleteProfile(profileId: string): void {
+    const nextProfiles = this.profiles.filter((profile) => profile.id !== profileId);
+    const deletedActiveProfile = this.activeProfileId === profileId;
+
+    this.profiles = nextProfiles;
+
+    if (nextProfiles.length === 0) {
+      this.activeProfileId = '';
+      this.activeProfileNameDraft = '';
+      this.resume = this.createDefaultResume();
+      this.activeScreen = 'list';
+      this.persistState();
+      return;
+    }
+
+    if (deletedActiveProfile) {
+      const nextActive = nextProfiles[0];
+      this.activeProfileId = nextActive.id;
+      this.resume = nextActive.resume;
+      this.activeProfileNameDraft = nextActive.name;
+      this.atsReport = this.buildAtsReport(this.resume);
+    }
+
+    this.persistState();
   }
 
   protected renameActiveProfile(name: string): void {
@@ -465,21 +636,9 @@ export class App implements OnInit {
   }
 
   protected deleteActiveProfile(): void {
-    if (this.profiles.length <= 1) {
-      this.profiles = [this.createResumeProfile('Resume 1', this.createDefaultResume())];
-      this.activeProfileId = this.profiles[0].id;
-      this.resume = this.profiles[0].resume;
-      this.activeProfileNameDraft = this.profiles[0].name;
-      this.persistState();
-      return;
+    if (this.activeProfileId) {
+      this.deleteProfile(this.activeProfileId);
     }
-
-    this.profiles = this.profiles.filter((profile) => profile.id !== this.activeProfileId);
-    const nextProfile = this.profiles[0];
-    this.activeProfileId = nextProfile.id;
-    this.resume = nextProfile.resume;
-    this.activeProfileNameDraft = nextProfile.name;
-    this.persistState();
   }
 
   protected setTemplate(template: TemplateKey): void {
@@ -665,58 +824,45 @@ export class App implements OnInit {
     }
 
     const saved = window.localStorage.getItem(workspaceKey);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved) as Partial<WorkspaceState>;
-        const profiles = Array.isArray(parsed.profiles)
-          ? parsed.profiles
-              .map((profile) => this.normalizeProfile(profile))
-              .filter((profile): profile is ResumeProfile => profile !== null)
-          : [];
-
-        this.profiles = profiles.length ? profiles : [this.createResumeProfile('Resume 1', this.createDefaultResume())];
-        this.activeProfileId =
-          typeof parsed.activeProfileId === 'string' && this.profiles.some((profile) => profile.id === parsed.activeProfileId)
-            ? parsed.activeProfileId
-            : this.profiles[0].id;
-        const activeProfile = this.activeProfile;
-        if (activeProfile) {
-          this.resume = activeProfile.resume;
-          this.activeProfileNameDraft = activeProfile.name;
-          this.lastSavedLabel = `Loaded ${activeProfile.name}`;
-        }
-        return;
-      } catch {
-        window.localStorage.removeItem(workspaceKey);
-      }
+    if (!saved) {
+      this.profiles = [];
+      this.activeProfileId = '';
+      this.activeProfileNameDraft = '';
+      this.resume = this.createDefaultResume();
+      this.activeScreen = 'list';
+      this.atsReport = this.buildAtsReport(this.resume);
+      this.lastSavedLabel = '';
+      return;
     }
 
-    const legacyKey = `${STORAGE_KEY}:${this.currentUser?.username ?? ''}`;
-    const legacy = window.localStorage.getItem(legacyKey) ?? window.localStorage.getItem(STORAGE_KEY);
-    if (legacy) {
-      try {
-        const parsed = JSON.parse(legacy) as unknown;
-        const imported = this.normalizeImportedState(parsed);
-        this.resume = imported;
-        this.profiles = [this.createResumeProfile('Resume 1', imported)];
-        this.activeProfileId = this.profiles[0].id;
-        this.activeProfileNameDraft = this.profiles[0].name;
-        this.saveWorkspace();
-        this.lastSavedLabel = 'Loaded from local storage';
-        return;
-      } catch {
-        window.localStorage.removeItem(legacyKey);
-        window.localStorage.removeItem(STORAGE_KEY);
-      }
+    try {
+      const parsed = JSON.parse(saved) as Partial<WorkspaceState>;
+      this.profiles = Array.isArray(parsed.profiles)
+        ? parsed.profiles
+            .map((profile) => this.normalizeProfile(profile))
+            .filter((profile): profile is ResumeProfile => profile !== null)
+        : [];
+      this.activeProfileId =
+        typeof parsed.activeProfileId === 'string' &&
+        this.profiles.some((profile) => profile.id === parsed.activeProfileId)
+          ? parsed.activeProfileId
+          : this.profiles[0]?.id ?? '';
+      const activeProfile = this.activeProfile;
+      this.resume = activeProfile?.resume ?? this.createDefaultResume();
+      this.activeProfileNameDraft = activeProfile?.name ?? '';
+      this.activeScreen = 'list';
+      this.atsReport = this.buildAtsReport(this.resume);
+      this.lastSavedLabel = this.profiles.length ? 'Loaded saved resumes' : '';
+    } catch {
+      window.localStorage.removeItem(workspaceKey);
+      this.profiles = [];
+      this.activeProfileId = '';
+      this.activeProfileNameDraft = '';
+      this.resume = this.createDefaultResume();
+      this.activeScreen = 'list';
+      this.atsReport = this.buildAtsReport(this.resume);
+      this.lastSavedLabel = '';
     }
-
-    const profile = this.createResumeProfile('Resume 1', this.createDefaultResume());
-    this.profiles = [profile];
-    this.activeProfileId = profile.id;
-    this.resume = profile.resume;
-    this.activeProfileNameDraft = profile.name;
-    this.saveWorkspace();
-    this.lastSavedLabel = '';
   }
 
   private saveWorkspace(): void {
@@ -823,10 +969,12 @@ export class App implements OnInit {
   }
 
   private createResumeProfile(name: string, resume: ResumeState): ResumeProfile {
+    const now = new Date().toISOString();
     return {
       id: this.createId(),
       name,
-      updatedAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
       resume,
     };
   }
@@ -840,6 +988,8 @@ export class App implements OnInit {
     return {
       id: typeof candidate.id === 'string' ? candidate.id : this.createId(),
       name: typeof candidate.name === 'string' && candidate.name.trim() ? candidate.name : 'Resume',
+      createdAt:
+        typeof candidate.createdAt === 'string' ? candidate.createdAt : new Date().toISOString(),
       updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : new Date().toISOString(),
       resume: this.normalizeImportedState(candidate.resume),
     };

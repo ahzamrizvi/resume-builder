@@ -1,1 +1,211 @@
-/* Intentionally left minimal so the component style bundle stays under budget. */
+main.shell.resume-list-shell {
+  display: block;
+  min-height: 100dvh;
+  padding: 18px 18px 28px;
+  background: linear-gradient(180deg, var(--bg) 0%, var(--bg-alt) 100%);
+  color: var(--text);
+}
+
+main.shell.resume-list-shell .panel {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.list-panel {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding-top: 1rem;
+}
+
+.list-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.list-page-header .panel-title {
+  margin: 0;
+  font-size: 1.75rem;
+  color: var(--text);
+}
+
+.list-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.view-switcher {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.view-label {
+  margin-right: 0.15rem;
+}
+
+.view-btn,
+.create-resume-btn,
+.resume-action {
+  border: 1px solid transparent;
+  background: transparent;
+}
+
+.view-btn {
+  width: 42px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  color: var(--accent);
+  cursor: default;
+}
+
+.view-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.view-btn.active {
+  background: var(--accent-soft);
+}
+
+.create-resume-btn {
+  min-width: 230px;
+  padding: 0.9rem 1.25rem;
+  border-color: var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.resume-table {
+  display: grid;
+  gap: 0;
+}
+
+.resume-table-head,
+.resume-table-row {
+  display: grid;
+  grid-template-columns: 2.2fr 1fr 1fr 0.7fr 1.5fr 1.6fr;
+  gap: 1rem;
+  align-items: center;
+}
+
+.resume-table-head {
+  padding: 1rem 0 1.1rem;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.resume-table-row {
+  min-height: 78px;
+  padding: 1rem 0;
+  border-top: 1px solid var(--panel-border);
+  color: var(--text);
+}
+
+.resume-name {
+  color: var(--muted);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.resume-name strong {
+  font-weight: 600;
+}
+
+.strength-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.resume-row-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+}
+
+.resume-action {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0;
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.resume-action svg {
+  width: 20px;
+  height: 20px;
+}
+
+.resume-action.danger {
+  color: #ef4444;
+}
+
+.empty-state {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1.25rem 0;
+}
+
+.editor-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+@media (max-width: 960px) {
+  .list-page-header,
+  .title-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .resume-table-head,
+  .resume-table-row {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  .resume-table-head {
+    display: none;
+  }
+
+  .resume-table-row {
+    padding: 1rem 0 1.25rem;
+  }
+
+  .resume-row-actions {
+    margin-top: 0.35rem;
+  }
+}

@@ -1,5 +1,17 @@
 <ng-container *ngIf="isAuthenticated; else loginScreen">
 <header class="site-header" [ngClass]="themeClass" [ngStyle]="accentStyle">
+  <button
+    *ngIf="!isHeaderMenuOpen"
+    type="button"
+    class="hamburger-btn ghost"
+    (click)="toggleHeaderMenu()"
+    [attr.aria-expanded]="isHeaderMenuOpen"
+    aria-label="Toggle header menu"
+  >
+    <span></span>
+    <span></span>
+    <span></span>
+  </button>
   <div class="site-brand">
     <span class="site-mark">BR</span>
     <div>
@@ -8,54 +20,117 @@
       <p class="site-subtitle">Build, manage, and export resume profiles in one place.</p>
     </div>
   </div>
-  <div class="site-actions">
-    <span class="session-chip">{{ currentUser?.displayName }}</span>
-    <button
-      type="button"
-      class="ghost theme-toggle"
-      (click)="toggleTheme()"
-      [attr.aria-label]="resume.theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'"
-      [attr.title]="resume.theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'"
-    >
-      <svg
-        *ngIf="resume.theme === 'light'; else sunIcon"
-        viewBox="0 0 24 24"
-        aria-hidden="true"
-        focusable="false"
-      >
-        <path
-          d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.8"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      </svg>
-      <ng-template #sunIcon>
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <circle
-            cx="12"
-            cy="12"
-            r="4.5"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.8"
-          />
-          <path
-            d="M12 2.5v2.5M12 19v2.5M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2.5 12h2.5M19 12h2.5M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.8"
-            stroke-linecap="round"
-          />
-        </svg>
-      </ng-template>
-    </button>
-    <button type="button" class="ghost" (click)="logout()">Logout</button>
-  </div>
 </header>
-<main class="shell" [ngClass]="themeClass" [ngStyle]="accentStyle">
+<aside class="header-drawer" [class.open]="isHeaderMenuOpen" aria-label="Header menu">
+  <div class="header-profile-panel">
+    <div class="drawer-top">
+      <div class="drawer-user">
+        <div class="drawer-avatar">{{ currentUserAvatar }}</div>
+        <div>
+          <strong>{{ currentUserName }}</strong>
+          <p>{{ currentUser?.username }}</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        class="hamburger-btn ghost drawer-toggle"
+        (click)="closeHeaderMenu()"
+        aria-label="Close header menu"
+      >
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </div>
+
+    <nav class="drawer-nav" aria-label="Primary navigation">
+        <button
+          *ngFor="let item of drawerItems"
+          type="button"
+          class="drawer-nav-item"
+          (click)="onDrawerItemClick(item.action)"
+      >
+        <span class="drawer-nav-icon" [ngSwitch]="item.icon">
+          <svg *ngSwitchCase="'moon'" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M15.8 3.5a8.5 8.5 0 1 0 4.7 12.9A9.5 9.5 0 1 1 15.8 3.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+          </svg>
+          <svg *ngSwitchCase="'list'" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <svg *ngSwitchCase="'logout'" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M10 17l5-5-5-5M15 12H3m9 8H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="drawer-nav-label">{{ item.action === 'toggle-theme' ? drawerThemeLabel : item.label }}</span>
+      </button>
+    </nav>
+
+    <div class="drawer-footer">
+      
+    </div>
+  </div>
+</aside>
+<main class="shell resume-list-shell" *ngIf="activeScreen === 'list'" [ngClass]="themeClass" [ngStyle]="accentStyle">
+  <section class="resume-list-page list-panel">
+    <header class="list-page-header">
+      <div>
+        <h2 class="panel-title">My Resumes</h2>
+      </div>
+      <div class="list-page-actions">
+        <button type="button" class="create-resume-btn" (click)="createProfile()">
+          {{ profiles.length ? 'Create New Resume' : 'Create my first resume' }}
+        </button>
+      </div>
+    </header>
+
+    <ng-container *ngIf="hasProfiles; else emptyResumeList">
+      <div class="resume-table">
+        <div class="resume-table-head">
+          <span>MY RESUMES</span>
+          <span>MODIFICATION</span>
+          <span>CREATION</span>
+          <span>STRENGTH</span>
+          <span>ACTIONS</span>
+        </div>
+        
+        <article class="resume-table-row" *ngFor="let profile of profiles">
+          <div class="resume-name">
+            <strong>{{ profileDisplayName(profile) }}</strong>
+          </div>
+          <div>{{ profile.updatedAt | date: 'd/M/yyyy' }}</div>
+          <div>{{ profile.createdAt | date: 'd/M/yyyy' }}</div>
+          <div><span class="strength-pill" [ngClass]="profileScoreClass(profile)">{{ profileScore(profile) }}</span></div>
+          <div class="resume-row-actions">
+            <button type="button" class="resume-action" (click)="selectProfile(profile.id)">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 4v12m0 0 4-4m-4 4-4-4M5 20h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>EDIT</span>
+            </button>
+            <button type="button" class="resume-action danger" (click)="deleteProfile(profile.id)">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 7h14M10 11v6M14 11v6M9 7V5h6v2m-8 0 .6 10.2A2 2 0 0 0 9.6 19h4.8a2 2 0 0 0 2-1.8L17 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>DELETE</span>
+            </button>
+          </div>
+        </article>
+      </div>
+    </ng-container>
+
+    <ng-template #emptyResumeList>
+      <div class="empty-state">
+        <h3>No resumes yet</h3>
+        <p>Create your first resume to start editing and saving it locally.</p>
+        <button type="button" class="ghost" (click)="createFirstResume()">
+          Create my first resume
+        </button>
+      </div>
+    </ng-template>
+  </section>
+</main>
+
+<main class="shell" *ngIf="activeScreen === 'editor'" [ngClass]="themeClass" [ngStyle]="accentStyle">
   <section class="panel editor">
     <header class="panel-header">
       <div class="title-row">
@@ -63,51 +138,12 @@
           <h2 class="panel-title">Editor</h2>
           <p class="lede">Edit once, switch templates, and keep the whole profile in sync.</p>
         </div>
+        <div class="editor-actions">
+          <button type="button" class="ghost" (click)="openResumeList()">Back to resumes</button>
+          <button type="button" class="ghost" (click)="persistState()">Save resume</button>
+        </div>
       </div>
     </header>
-
-    <section class="profile-manager">
-      <div class="section-head">
-        <div>
-          <h2>Saved profiles</h2>
-          <p class="section-note">Create, switch, rename, and delete resume snapshots.</p>
-        </div>
-        <button type="button" class="ghost" (click)="createProfile()">New profile</button>
-      </div>
-
-      <label class="full profile-name-field">
-        <span>Active profile name</span>
-        <input
-          [(ngModel)]="activeProfileNameDraft"
-          (ngModelChange)="renameActiveProfile($event)"
-          name="activeProfileNameDraft"
-          type="text"
-          placeholder="Resume 1"
-        />
-      </label>
-
-      <div class="profile-grid">
-        <button
-          *ngFor="let profile of profiles"
-          type="button"
-          class="profile-card"
-          [class.active]="profile.id === activeProfileId"
-          (click)="selectProfile(profile.id)"
-        >
-          <strong>{{ profile.name }}</strong>
-          <span>{{ profile.updatedAt | date : 'medium' }}</span>
-        </button>
-      </div>
-
-      <button
-        type="button"
-        class="ghost danger"
-        (click)="deleteActiveProfile()"
-        [disabled]="profiles.length === 1"
-      >
-        Delete active profile
-      </button>
-    </section>
 
     <form class="editor-form" (input)="persistState()">
       <div
@@ -660,7 +696,7 @@
       <div>
         <p class="eyebrow">Resume studio</p>
         <h1>{{ title }}</h1>
-        <p class="site-subtitle">Sign in or sign up to manage resume profiles locally.</p>
+        <p class="site-subtitle">Login or sign up to manage resume profiles locally.</p>
       </div>
     </div>
     <div class="site-actions">
@@ -672,7 +708,7 @@
       <p class="eyebrow">Local authentication</p>
       <h1>{{ title }}</h1>
       <p class="lede">
-        Sign in to access an existing account or sign up to create a new local account.
+        Login to access an existing account or sign up to create a new local account.
       </p>
 
       <div class="auth-tabs">
@@ -682,7 +718,7 @@
           [class.active]="authMode === 'sign-in'"
           (click)="setAuthMode('sign-in')"
         >
-          Sign in
+          Login
           <small>Use an existing account</small>
         </button>
         <button
@@ -734,7 +770,7 @@
           />
         </label>
         <button type="submit" class="ghost auth-submit">
-          {{ authMode === 'sign-in' ? 'Sign in' : 'Sign up' }}
+          {{ authMode === 'sign-in' ? 'Login' : 'Sign up' }}
         </button>
       </form>
 
