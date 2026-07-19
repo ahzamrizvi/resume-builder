@@ -37,7 +37,7 @@ BrResume is an Angular-based resume builder. It lets you edit resume content in 
 
 ## If I Had More Time
 
-- Add automated tests around auth, workspace restore, and resume normalization
+- Add an AI resume assistant that can generate or populate resume content from a user prompt, reducing manual data entry
 - Reduce the remaining logic in `app.ts` by splitting it into smaller feature services
 - Improve accessibility and keyboard navigation across the editor
 - Add import/export for saved resume data
