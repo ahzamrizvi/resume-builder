@@ -71,24 +71,6 @@ export class App implements OnInit {
       layout: 'two-side',
     },
     {
-      key: 'creative',
-      label: 'Creative',
-      description: 'Visual emphasis with a bold accent block.',
-      layout: 'single',
-    },
-    {
-      key: 'balanced',
-      label: 'Balanced',
-      description: 'Refined single-column layout with lighter spacing.',
-      layout: 'single',
-    },
-    {
-      key: 'right-side-pro',
-      label: 'Right Side Pro',
-      description: 'Split layout with a stronger right-hand sidebar.',
-      layout: 'two-side',
-    },
-    {
       key: 'academic',
       label: 'Academic',
       description: 'Publication-friendly split structure.',
@@ -99,12 +81,6 @@ export class App implements OnInit {
       label: 'Minimalist',
       description: 'Stripped-down layout with almost no chrome.',
       layout: 'single',
-    },
-    {
-      key: 'portfolio',
-      label: 'Portfolio',
-      description: 'Two-side project-forward layout for design and product roles.',
-      layout: 'two-side',
     },
   ];
   protected readonly sectionLabels: Record<SectionKey, string> = {
@@ -145,10 +121,11 @@ export class App implements OnInit {
   protected lastSavedLabel = '';
   protected saveToastMessage = '';
   protected isSaveToastVisible = false;
+  protected previewScale = 1;
+  protected previewPages: Array<{ sections: SectionKey[] }> = [];
   private saveToastTimer: ReturnType<typeof setTimeout> | null = null;
   protected isDrawerSettingsOpen = false;
   protected readonly drawerItems: DrawerItem[] = [
-    { label: 'Dark Mode', icon: 'moon', action: 'toggle-theme' },
     { label: 'All Resume', icon: 'list', action: 'go-to-list' },
     { label: 'Logout', icon: 'logout', action: 'logout' },
   ];
@@ -171,6 +148,12 @@ export class App implements OnInit {
     this.closeHeaderMenu();
   }
 
+  @HostListener('window:resize')
+  protected onWindowResize(): void {
+    this.updatePreviewScale();
+    this.updatePreviewPages();
+  }
+
   ngOnInit(): void {
     if (this.browser) {
       this.restoreSession();
@@ -178,6 +161,7 @@ export class App implements OnInit {
         this.restoreWorkspace();
       }
       this.updateDerivedState();
+      this.updatePreviewScale();
     }
   }
 
@@ -201,10 +185,6 @@ export class App implements OnInit {
 
   get templateClass(): string {
     return `template-${this.resume.template}`;
-  }
-
-  get themeClass(): string {
-    return `theme-${this.resume.theme}`;
   }
 
   get accentStyle(): Record<string, string> {
@@ -244,14 +224,6 @@ export class App implements OnInit {
       .map((part) => part.charAt(0).toUpperCase())
       .join('')
       .slice(0, 2);
-  }
-
-  get themeActionLabel(): string {
-    return this.resume.theme === 'light' ? 'Dark mode' : 'Light mode';
-  }
-
-  get drawerThemeLabel(): string {
-    return this.resume.theme === 'dark' ? 'Light Mode' : 'Dark Mode';
   }
 
   get hasProfiles(): boolean {
@@ -352,9 +324,6 @@ export class App implements OnInit {
       return;
     }
 
-    if (action === 'toggle-theme') {
-      this.toggleTheme();
-    }
   }
 
   protected setAuthMode(mode: AuthMode): void {
@@ -573,11 +542,6 @@ export class App implements OnInit {
     void this.buildResumePdf();
   }
 
-  protected toggleTheme(): void {
-    this.resume.theme = this.resume.theme === 'light' ? 'dark' : 'light';
-    this.persistState();
-  }
-
   protected addExperience(): void {
     this.resume.experience = [...this.resume.experience, this.createEmptyExperienceEntry()];
     this.persistState();
@@ -638,6 +602,90 @@ export class App implements OnInit {
       this.saveToastMessage = '';
       this.saveToastTimer = null;
     }, 2200);
+  }
+
+  private updatePreviewScale(): void {
+    if (!this.browser) {
+      this.previewScale = 1;
+      return;
+    }
+
+    const availableWidth = Math.max(280, window.innerWidth - 24);
+    const baseScale = Math.min(1, availableWidth / 794);
+    this.previewScale = baseScale;
+  }
+
+  private updatePreviewPages(): void {
+    const sections = [...this.orderedSections];
+
+    if (this.isTwoSideTemplate) {
+      this.previewPages = [{ sections }];
+      return;
+    }
+
+    const firstPageCapacity = 760;
+    const nextPageCapacity = 900;
+    const pages: Array<{ sections: SectionKey[] }> = [];
+    let current: SectionKey[] = [];
+    let currentHeight = 0;
+
+    for (const section of sections) {
+      const sectionHeight = this.estimateSectionHeight(section);
+      const capacity = pages.length === 0 ? firstPageCapacity : nextPageCapacity;
+
+      if (current.length && currentHeight + sectionHeight > capacity) {
+        pages.push({ sections: current });
+        current = [];
+        currentHeight = 0;
+      }
+
+      current.push(section);
+      currentHeight += sectionHeight;
+    }
+
+    if (current.length || pages.length === 0) {
+      pages.push({ sections: current });
+    }
+
+    this.previewPages = pages;
+  }
+
+  private estimateSectionHeight(section: SectionKey): number {
+    switch (section) {
+      case 'personal':
+        return 90;
+      case 'summary':
+        return this.estimateTextHeight(this.resume.summary, 68, 18, 90);
+      case 'experience':
+        return (
+          this.resume.experience.reduce((total, item) => {
+            return total + this.estimateTextHeight(item.highlights, 60, 18, 84) + 56;
+          }, 0) || 92
+        );
+      case 'projects':
+        return (
+          this.resume.projects.reduce((total, item) => {
+            return total + this.estimateTextHeight(item.description, 60, 18, 76) + 52;
+          }, 0) || 88
+        );
+      case 'education':
+        return (this.resume.education.length || 1) * 72;
+      case 'skills':
+        return this.estimateSkillsHeight();
+      default:
+        return 72;
+    }
+  }
+
+  private estimateTextHeight(text: string, charsPerLine: number, lineHeight: number, minHeight: number): number {
+    const lines = Math.max(1, Math.ceil((text.trim().length || 1) / charsPerLine));
+    return Math.max(minHeight, lines * lineHeight);
+  }
+
+  private estimateSkillsHeight(): number {
+    const skillCount = this.skillList.length || 1;
+    const lines = Math.max(1, Math.ceil(skillCount / 4));
+    return Math.max(44, lines * 20 + 10);
   }
 
   protected onPhotoSelected(event: Event): void {
@@ -714,6 +762,7 @@ export class App implements OnInit {
 
   private updateDerivedState(): void {
     this.atsReport = this.buildAtsReport(this.resume);
+    this.updatePreviewPages();
   }
 
   private restoreSession(): void {
@@ -922,7 +971,7 @@ export class App implements OnInit {
   }
 
   private normalizeTheme(value: unknown): ThemeMode {
-    return value === 'dark' ? 'dark' : 'light';
+    return 'light';
   }
 
   private normalizeAccentColor(value: unknown): string {
@@ -981,34 +1030,88 @@ export class App implements OnInit {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
       const exportRoot = this.createInlineStyledClone(element);
+      this.preparePdfExportClone(exportRoot);
       wrapper = document.createElement('div');
+      wrapper.className = `pdf-export ${this.templateClass}`;
       wrapper.style.position = 'fixed';
       wrapper.style.left = '-100000px';
       wrapper.style.top = '0';
+      wrapper.style.width = '794px';
       wrapper.style.background = '#ffffff';
+      wrapper.style.setProperty('--preview-scale', '1');
+
+      const sourceShell = element.closest('.shell') as HTMLElement | null;
+      const sourceStyles = getComputedStyle(sourceShell ?? document.documentElement);
+      wrapper.style.fontFamily = sourceStyles.fontFamily;
+      wrapper.style.color = sourceStyles.color;
+      wrapper.style.lineHeight = sourceStyles.lineHeight;
+      wrapper.style.backgroundColor = sourceStyles.backgroundColor || '#ffffff';
+
+      for (let index = 0; index < sourceStyles.length; index += 1) {
+        const propertyName = sourceStyles.item(index);
+        if (propertyName.startsWith('--')) {
+          wrapper.style.setProperty(
+            propertyName,
+            sourceStyles.getPropertyValue(propertyName),
+            sourceStyles.getPropertyPriority(propertyName),
+          );
+        }
+      }
+
+      const exportWrapper = wrapper;
+      Object.entries(this.accentStyle).forEach(([key, value]) => {
+        if (key.startsWith('--')) {
+          exportWrapper.style.setProperty(key, value);
+        }
+      });
       wrapper.appendChild(exportRoot);
       document.body.appendChild(wrapper);
 
-      const canvas = await html2canvas(exportRoot, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        scrollX: 0,
-        scrollY: 0,
-        width: exportRoot.scrollWidth,
-        height: exportRoot.scrollHeight,
-      });
-
       const doc = new jsPDF({
-        orientation: canvas.width >= canvas.height ? 'l' : 'p',
+        orientation: 'p',
         unit: 'pt',
-        format: [canvas.width, canvas.height],
+        format: 'a4',
         compress: true,
       });
 
-      const imgData = canvas.toDataURL('image/png', 1.0);
-      doc.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const marginX = 24;
+      const marginY = 24;
+      const contentWidth = pageWidth - marginX * 2;
+      const contentHeight = pageHeight - marginY * 2;
+      const pageTargets = Array.from(exportRoot.querySelectorAll('.preview-page')) as HTMLElement[];
+      const fallbackTarget = (exportRoot.querySelector('.resume-card') as HTMLElement | null) ?? exportRoot;
+      const targets = pageTargets.length ? pageTargets : [fallbackTarget];
+
+      for (let index = 0; index < targets.length; index += 1) {
+        const target = targets[index];
+        const targetClone = target.cloneNode(true) as HTMLElement;
+        this.preparePdfExportPageClone(targetClone);
+        wrapper.appendChild(targetClone);
+
+        const canvas = await html2canvas(targetClone, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          scrollX: 0,
+          scrollY: 0,
+          width: targetClone.scrollWidth,
+          height: targetClone.scrollHeight,
+        });
+
+        if (index > 0) {
+          doc.addPage();
+        }
+
+        const imgData = canvas.toDataURL('image/png', 1.0);
+        const imageHeight = (canvas.height * contentWidth) / canvas.width;
+        doc.addImage(imgData, 'PNG', marginX, marginY, contentWidth, Math.min(imageHeight, contentHeight));
+
+        targetClone.remove();
+      }
+
       doc.save(this.buildDownloadFileName());
     } finally {
       if (wrapper?.parentNode) {
@@ -1020,9 +1123,104 @@ export class App implements OnInit {
   }
 
   private createInlineStyledClone(source: HTMLElement): HTMLElement {
-    const clone = source.cloneNode(true) as HTMLElement;
-    this.copyComputedStyles(source, clone);
-    return clone;
+    return source.cloneNode(true) as HTMLElement;
+  }
+
+  private preparePdfExportClone(root: HTMLElement): void {
+    const a4Width = '210mm';
+    const a4MinWidth = '794px';
+
+    root.style.width = a4Width;
+    root.style.minWidth = a4MinWidth;
+    root.style.maxWidth = a4Width;
+    root.style.maxHeight = 'none';
+    root.style.overflow = 'visible';
+    root.style.transform = 'none';
+
+    const header = root.querySelector('.preview-header') as HTMLElement | null;
+    if (header) {
+      header.style.width = a4Width;
+      header.style.minWidth = a4MinWidth;
+      header.style.maxWidth = a4Width;
+    }
+
+    const frame = root.querySelector('.preview-frame') as HTMLElement | null;
+    if (frame) {
+      frame.style.width = a4Width;
+      frame.style.minWidth = a4MinWidth;
+      frame.style.maxWidth = a4Width;
+      frame.style.transform = 'none';
+    }
+
+    const pages = root.querySelectorAll('.preview-page');
+    pages.forEach((page) => {
+      const pageElement = page as HTMLElement;
+      pageElement.style.width = a4Width;
+      pageElement.style.minWidth = a4MinWidth;
+      pageElement.style.maxWidth = a4Width;
+    });
+
+    const card = root.querySelector('.resume-card') as HTMLElement | null;
+    if (card) {
+      card.style.width = a4Width;
+      card.style.minWidth = a4MinWidth;
+      card.style.maxWidth = a4Width;
+      card.style.minHeight = '297mm';
+      card.style.fontSize = '14px';
+    }
+
+    const split = root.querySelector('.resume-split') as HTMLElement | null;
+    if (split) {
+      split.style.gridTemplateColumns = 'minmax(180px, 0.62fr) minmax(0, 1.38fr)';
+    }
+
+    const rows = root.querySelectorAll('.row');
+    rows.forEach((row) => {
+      const rowElement = row as HTMLElement;
+      rowElement.style.flexWrap = 'wrap';
+      rowElement.style.alignItems = 'baseline';
+    });
+
+    const textBlocks = root.querySelectorAll(
+      '.contact > span, .sidebar-list > span, .preview-entry p, .preview-entry strong',
+    );
+    textBlocks.forEach((node) => {
+      const elementNode = node as HTMLElement;
+      elementNode.style.overflowWrap = 'anywhere';
+      elementNode.style.wordBreak = 'break-word';
+      elementNode.style.minWidth = '0';
+    });
+  }
+
+  private preparePdfExportPageClone(page: HTMLElement): void {
+    const a4Width = '210mm';
+    const a4MinWidth = '794px';
+
+    page.style.width = a4Width;
+    page.style.minWidth = a4MinWidth;
+    page.style.maxWidth = a4Width;
+    page.style.transform = 'none';
+    page.style.background = '#ffffff';
+    page.style.breakAfter = 'auto';
+
+    const card = page.querySelector('.resume-card') as HTMLElement | null;
+    if (card) {
+      card.style.width = a4Width;
+      card.style.minWidth = a4MinWidth;
+      card.style.maxWidth = a4Width;
+      card.style.minHeight = '297mm';
+      card.style.fontSize = '14px';
+    }
+
+    const textBlocks = page.querySelectorAll(
+      '.contact > span, .sidebar-list > span, .row > *, .preview-entry p, .preview-entry strong',
+    );
+    textBlocks.forEach((node) => {
+      const elementNode = node as HTMLElement;
+      elementNode.style.overflowWrap = 'anywhere';
+      elementNode.style.wordBreak = 'break-word';
+      elementNode.style.minWidth = '0';
+    });
   }
 
   private buildDownloadFileName(): string {

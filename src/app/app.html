@@ -1,5 +1,5 @@
 <ng-container *ngIf="isAuthenticated; else loginScreen">
-<header class="site-header" [ngClass]="themeClass" [ngStyle]="accentStyle">
+<header class="site-header" [ngStyle]="accentStyle">
   <button
     *ngIf="!isHeaderMenuOpen"
     type="button"
@@ -51,9 +51,6 @@
           (click)="onDrawerItemClick(item.action)"
       >
         <span class="drawer-nav-icon" [ngSwitch]="item.icon">
-          <svg *ngSwitchCase="'moon'" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M15.8 3.5a8.5 8.5 0 1 0 4.7 12.9A9.5 9.5 0 1 1 15.8 3.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
-          </svg>
           <svg *ngSwitchCase="'list'" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
@@ -61,7 +58,7 @@
             <path d="M10 17l5-5-5-5M15 12H3m9 8H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </span>
-        <span class="drawer-nav-label">{{ item.action === 'toggle-theme' ? drawerThemeLabel : item.label }}</span>
+        <span class="drawer-nav-label">{{ item.label }}</span>
       </button>
     </nav>
 
@@ -70,7 +67,7 @@
     </div>
   </div>
 </aside>
-<main class="shell resume-list-shell" *ngIf="activeScreen === 'list'" [ngClass]="themeClass" [ngStyle]="accentStyle">
+<main class="shell resume-list-shell" *ngIf="activeScreen === 'list'" [ngStyle]="accentStyle">
   <section class="resume-list-page list-panel">
     <header class="list-page-header">
       <div>
@@ -89,17 +86,17 @@
           <span>MY RESUMES</span>
           <span>MODIFICATION</span>
           <span>CREATION</span>
-          <span>STRENGTH</span>
+          <span>ATS SCORE</span>
           <span>ACTIONS</span>
         </div>
         
         <article class="resume-table-row" *ngFor="let profile of profiles">
-          <div class="resume-name">
+          <div class="resume-name" data-label="Resume">
             <strong>{{ profileDisplayName(profile) }}</strong>
           </div>
-          <div>{{ profile.updatedAt | date: 'd/M/yyyy' }}</div>
-          <div>{{ profile.createdAt | date: 'd/M/yyyy' }}</div>
-          <div><span class="strength-pill" [ngClass]="profileScoreClass(profile)">{{ profileScore(profile) }}</span></div>
+          <div data-label="Modified">{{ profile.updatedAt | date: 'd/M/yyyy' }}</div>
+          <div data-label="Created">{{ profile.createdAt | date: 'd/M/yyyy' }}</div>
+          <div data-label="Strength"><span class="strength-pill" [ngClass]="profileScoreClass(profile)">{{ profileScore(profile) }}</span></div>
           <div class="resume-row-actions">
             <button type="button" class="resume-action" (click)="selectProfile(profile.id)">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -130,7 +127,7 @@
   </section>
 </main>
 
-<main class="shell" *ngIf="activeScreen === 'editor'" [ngClass]="themeClass" [ngStyle]="accentStyle">
+<main class="shell" *ngIf="activeScreen === 'editor'" [ngStyle]="accentStyle">
   <div class="save-toast" *ngIf="isSaveToastVisible">{{ saveToastMessage }}</div>
   <section class="panel editor">
     <header class="panel-header">
@@ -423,7 +420,6 @@
       <section class="template-gallery">
         <div class="section-head">
           <h2>Template gallery</h2>
-          <span class="hint">10 visual previews</span>
         </div>
         <div class="template-controls">
           <div class="toolbar-group">
@@ -523,169 +519,169 @@
     </form>
   </section>
 
-  <aside class="panel preview" [ngClass]="[templateClass, themeClass]">
-    <header class="preview-header">
-      <ng-container *ngIf="!isTwoSideTemplate">
-        <div class="preview-hero">
-          <div class="preview-photo" *ngIf="resume.personal.photoDataUrl">
-            <img [src]="resume.personal.photoDataUrl" alt="Profile photo" />
-          </div>
-          <div>
-            <h2>{{ fullName || 'Your name here' }}</h2>
-            <p class="role">{{ resume.personal.role || 'Add a role title' }}</p>
-          </div>
-        </div>
-      </ng-container>
-    </header>
-
-    <section
-      class="resume-card"
-      [class.split]="isTwoSideTemplate"
-      [class.right-sidebar]="
-        resume.template === 'right-side' || resume.template === 'right-side-pro'
-      "
-    >
+  <aside class="panel preview" [ngClass]="templateClass">
+    <div class="preview-frame" [style.--preview-scale]="previewScale">
       <ng-container *ngIf="!isTwoSideTemplate; else twoSidePreview">
-        <div class="contact">
-          <span>{{ resume.personal.email || 'email@example.com' }}</span>
-          <span>{{ resume.personal.phone || '+00 00000 00000' }}</span>
-          <span>{{ resume.personal.location || 'Location' }}</span>
-          <span>{{ resume.personal.linkedin || 'LinkedIn' }}</span>
-          <span>{{ resume.personal.github || 'GitHub' }}</span>
-        </div>
-
-        <ng-container *ngFor="let section of orderedSections">
-          <section class="preview-section" [ngSwitch]="section">
-            <h3>{{ sectionLabels[section] }}</h3>
-
-            <ng-container *ngSwitchCase="'personal'">
-              <p>
-                {{ resume.personal.role || 'Add a professional title and contact details above.' }}
-              </p>
-            </ng-container>
-
-            <ng-container *ngSwitchCase="'summary'">
-              <p>
-                {{ resume.summary || 'Write a short summary of your experience and focus areas.' }}
-              </p>
-            </ng-container>
-
-            <ng-container *ngSwitchCase="'experience'">
-              <div class="preview-entry" *ngFor="let item of resume.experience">
-                <div class="row">
-                  <strong>{{ item.position }}</strong>
-                  <span>{{ item.period }}</span>
-                </div>
-                <p class="muted">{{ item.company }}</p>
-                <p>{{ item.highlights }}</p>
+        <section class="preview-page" *ngFor="let page of previewPages; let pageIndex = index">
+          <header class="preview-header" *ngIf="pageIndex === 0">
+            <div class="preview-hero">
+              <div class="preview-photo" *ngIf="resume.personal.photoDataUrl">
+                <img [src]="resume.personal.photoDataUrl" alt="Profile photo" />
               </div>
-            </ng-container>
-
-            <ng-container *ngSwitchCase="'projects'">
-              <div class="preview-entry" *ngFor="let item of resume.projects">
-                <div class="row">
-                  <strong>{{ item.name || 'Project name' }}</strong>
-                  <span>{{ item.link }}</span>
-                </div>
-                <p>{{ item.description || 'Add a short description of the project.' }}</p>
-                <p class="muted">{{ item.technologiesUsed || 'Technologies used' }}</p>
+              <div>
+                <h2>{{ fullName || 'Your name here' }}</h2>
+                <p class="role">{{ resume.personal.role || 'Add a role title' }}</p>
               </div>
-            </ng-container>
+            </div>
+          </header>
 
-            <ng-container *ngSwitchCase="'education'">
-              <div class="preview-entry" *ngFor="let item of resume.education">
-                <div class="row">
-                  <strong>{{ item.degree }}</strong>
-                  <span>{{ item.year }}</span>
-                </div>
-                <p class="muted">{{ item.school }}</p>
-              </div>
-            </ng-container>
+          <section class="resume-card" [class.first-page]="pageIndex === 0">
+            <div class="contact" *ngIf="pageIndex === 0">
+              <span>{{ resume.personal.email || 'email@example.com' }}</span>
+              <span>{{ resume.personal.phone || '+00 00000 00000' }}</span>
+              <span>{{ resume.personal.location || 'Location' }}</span>
+              <span>{{ resume.personal.linkedin || 'LinkedIn' }}</span>
+              <span>{{ resume.personal.github || 'GitHub' }}</span>
+            </div>
 
-            <ng-container *ngSwitchCase="'skills'">
-              <div class="chips">
-                <span class="chip" *ngFor="let skill of skillList">{{ skill }}</span>
-                <span class="chip ghost-chip" *ngIf="skillList.length === 0">Add skills</span>
-              </div>
+            <ng-container *ngFor="let section of page.sections">
+              <section class="preview-section" [ngSwitch]="section">
+                <h3>{{ sectionLabels[section] }}</h3>
+
+                <ng-container *ngSwitchCase="'personal'">
+                  <p>
+                    {{ resume.personal.role || 'Add a professional title and contact details above.' }}
+                  </p>
+                </ng-container>
+
+                <ng-container *ngSwitchCase="'summary'">
+                  <p>
+                    {{ resume.summary || 'Write a short summary of your experience and focus areas.' }}
+                  </p>
+                </ng-container>
+
+                <ng-container *ngSwitchCase="'experience'">
+                  <div class="preview-entry" *ngFor="let item of resume.experience">
+                    <div class="row">
+                      <strong>{{ item.position }}</strong>
+                      <span>{{ item.period }}</span>
+                    </div>
+                    <p class="muted">{{ item.company }}</p>
+                    <p>{{ item.highlights }}</p>
+                  </div>
+                </ng-container>
+
+                <ng-container *ngSwitchCase="'projects'">
+                  <div class="preview-entry" *ngFor="let item of resume.projects">
+                    <div class="row">
+                      <strong>{{ item.name || 'Project name' }}</strong>
+                      <span>{{ item.link }}</span>
+                    </div>
+                    <p>{{ item.description || 'Add a short description of the project.' }}</p>
+                    <p class="muted">{{ item.technologiesUsed || 'Technologies used' }}</p>
+                  </div>
+                </ng-container>
+
+                <ng-container *ngSwitchCase="'education'">
+                  <div class="preview-entry" *ngFor="let item of resume.education">
+                    <div class="row">
+                      <strong>{{ item.degree }}</strong>
+                      <span>{{ item.year }}</span>
+                    </div>
+                    <p class="muted">{{ item.school }}</p>
+                  </div>
+                </ng-container>
+
+                <ng-container *ngSwitchCase="'skills'">
+                  <div class="chips">
+                    <span class="chip" *ngFor="let skill of skillList">{{ skill }}</span>
+                    <span class="chip ghost-chip" *ngIf="skillList.length === 0">Add skills</span>
+                  </div>
+                </ng-container>
+              </section>
             </ng-container>
           </section>
-        </ng-container>
+        </section>
       </ng-container>
 
       <ng-template #twoSidePreview>
-        <div class="resume-split">
-          <aside class="resume-sidebar">
-            <div class="sidebar-block hero">
-              <div class="preview-photo large" *ngIf="resume.personal.photoDataUrl">
-                <img [src]="resume.personal.photoDataUrl" alt="Profile photo" />
-              </div>
-              <h2>{{ fullName || 'Your name here' }}</h2>
-              <p class="role">{{ resume.personal.role || 'Add a role title' }}</p>
-            </div>
-
-            <div class="sidebar-block">
-              <h3>Contact</h3>
-              <div class="sidebar-list">
-                <span>{{ resume.personal.email || 'email@example.com' }}</span>
-                <span>{{ resume.personal.phone || '+00 00000 00000' }}</span>
-                <span>{{ resume.personal.location || 'Location' }}</span>
-                <span>{{ resume.personal.linkedin || 'LinkedIn' }}</span>
-                <span>{{ resume.personal.github || 'GitHub' }}</span>
-              </div>
-            </div>
-
-            <div class="sidebar-block">
-              <h3>Skills</h3>
-              <div class="chips">
-                <span class="chip" *ngFor="let skill of skillList">{{ skill }}</span>
-                <span class="chip ghost-chip" *ngIf="skillList.length === 0">Add skills</span>
-              </div>
-            </div>
-
-            <div class="sidebar-block" *ngIf="resume.education.length">
-              <h3>Education</h3>
-              <div class="preview-entry" *ngFor="let item of resume.education">
-                <strong>{{ item.degree || 'Degree' }}</strong>
-                <p class="muted">{{ item.school || 'School name' }} - {{ item.year || 'Year' }}</p>
-              </div>
-            </div>
-          </aside>
-
-          <section class="resume-main">
-            <section class="preview-section">
-              <h3>Summary</h3>
-              <p>
-                {{ resume.summary || 'Write a short summary of your experience and focus areas.' }}
-              </p>
-            </section>
-
-            <section class="preview-section">
-              <h3>Experience</h3>
-              <div class="preview-entry" *ngFor="let item of resume.experience">
-                <div class="row">
-                  <strong>{{ item.position }}</strong>
-                  <span>{{ item.period }}</span>
+        <section class="preview-page">
+          <section class="resume-card split">
+            <div class="resume-split">
+              <aside class="resume-sidebar">
+                <div class="sidebar-block hero">
+                  <div class="preview-photo large" *ngIf="resume.personal.photoDataUrl">
+                    <img [src]="resume.personal.photoDataUrl" alt="Profile photo" />
+                  </div>
+                  <h2>{{ fullName || 'Your name here' }}</h2>
+                  <p class="role">{{ resume.personal.role || 'Add a role title' }}</p>
                 </div>
-                <p class="muted">{{ item.company }}</p>
-                <p>{{ item.highlights }}</p>
-              </div>
-            </section>
 
-            <section class="preview-section">
-              <h3>Projects</h3>
-              <div class="preview-entry" *ngFor="let item of resume.projects">
-                <div class="row">
-                  <strong>{{ item.name || 'Project name' }}</strong>
-                  <span>{{ item.link }}</span>
+                <div class="sidebar-block">
+                  <h3>Contact</h3>
+                  <div class="sidebar-list">
+                    <span>{{ resume.personal.email || 'email@example.com' }}</span>
+                    <span>{{ resume.personal.phone || '+00 00000 00000' }}</span>
+                    <span>{{ resume.personal.location || 'Location' }}</span>
+                    <span>{{ resume.personal.linkedin || 'LinkedIn' }}</span>
+                    <span>{{ resume.personal.github || 'GitHub' }}</span>
+                  </div>
                 </div>
-                <p>{{ item.description || 'Add a short description of the project.' }}</p>
-                <p class="muted">{{ item.technologiesUsed || 'Technologies used' }}</p>
-              </div>
-            </section>
+
+                <div class="sidebar-block">
+                  <h3>Skills</h3>
+                  <div class="chips">
+                    <span class="chip" *ngFor="let skill of skillList">{{ skill }}</span>
+                    <span class="chip ghost-chip" *ngIf="skillList.length === 0">Add skills</span>
+                  </div>
+                </div>
+
+                <div class="sidebar-block" *ngIf="resume.education.length">
+                  <h3>Education</h3>
+                  <div class="preview-entry" *ngFor="let item of resume.education">
+                    <strong>{{ item.degree || 'Degree' }}</strong>
+                    <p class="muted">{{ item.school || 'School name' }} - {{ item.year || 'Year' }}</p>
+                  </div>
+                </div>
+              </aside>
+
+              <section class="resume-main">
+                <section class="preview-section">
+                  <h3>Summary</h3>
+                  <p>
+                    {{ resume.summary || 'Write a short summary of your experience and focus areas.' }}
+                  </p>
+                </section>
+
+                <section class="preview-section">
+                  <h3>Experience</h3>
+                  <div class="preview-entry" *ngFor="let item of resume.experience">
+                    <div class="row">
+                      <strong>{{ item.position }}</strong>
+                      <span>{{ item.period }}</span>
+                    </div>
+                    <p class="muted">{{ item.company }}</p>
+                    <p>{{ item.highlights }}</p>
+                  </div>
+                </section>
+
+                <section class="preview-section">
+                  <h3>Projects</h3>
+                  <div class="preview-entry" *ngFor="let item of resume.projects">
+                    <div class="row">
+                      <strong>{{ item.name || 'Project name' }}</strong>
+                      <span>{{ item.link }}</span>
+                    </div>
+                    <p>{{ item.description || 'Add a short description of the project.' }}</p>
+                    <p class="muted">{{ item.technologiesUsed || 'Technologies used' }}</p>
+                  </div>
+                </section>
+              </section>
+            </div>
           </section>
-        </div>
+        </section>
       </ng-template>
-    </section>
+    </div>
   </aside>
 </main>
 </ng-container>

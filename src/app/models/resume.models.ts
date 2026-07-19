@@ -1,16 +1,12 @@
-export type ThemeMode = 'light' | 'dark';
+export type ThemeMode = 'light';
 
 export const TEMPLATE_KEYS = [
   'classic',
   'modern',
   'right-side',
   'executive',
-  'creative',
-  'balanced',
-  'right-side-pro',
   'academic',
   'minimalist',
-  'portfolio',
 ] as const;
 
 export type TemplateKey = (typeof TEMPLATE_KEYS)[number];
@@ -95,8 +91,8 @@ export type ResumeProfile = {
 
 export type DrawerItem = {
   label: string;
-  icon: 'moon' | 'list' | 'logout';
-  action: 'close' | 'go-to-list' | 'create-profile' | 'download' | 'toggle-theme' | 'switch-profile' | 'logout';
+  icon: 'list' | 'logout';
+  action: 'close' | 'go-to-list' | 'create-profile' | 'download' | 'switch-profile' | 'logout';
 };
 
 export type WorkspaceState = {
@@ -116,10 +112,8 @@ export const SECTION_ORDER: SectionKey[] = [
 
 export const TWO_SIDE_TEMPLATES: TemplateKey[] = [
   'right-side',
-  'right-side-pro',
   'executive',
   'academic',
-  'portfolio',
 ];
 
 export const DEFAULT_ACCENT_COLOR = '#4f46e5';
