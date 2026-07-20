@@ -1,0 +1,109 @@
+<header class="site-header auth-header">
+  <div class="site-brand">
+    <span class="site-mark">BR</span>
+    <div>
+      <p class="eyebrow">Resume studio</p>
+      <h1>{{ title }}</h1>
+      <p class="site-subtitle">
+        Login or sign up to manage resume profiles locally.
+      </p>
+    </div>
+  </div>
+  <div class="site-actions">
+    <span class="session-chip">Local auth</span>
+  </div>
+</header>
+<main class="auth-shell">
+  <section class="auth-card">
+    <p class="eyebrow">Local authentication</p>
+    <h1>{{ title }}</h1>
+    <p class="lede">
+      Login to access an existing account or sign up to create a new local
+      account.
+    </p>
+
+    <div class="auth-tabs">
+      <button
+        type="button"
+        class="segment"
+        [class.active]="authMode === 'sign-in'"
+        (click)="setAuthMode('sign-in')"
+      >
+        Login
+        <small>Use an existing account</small>
+      </button>
+      <button
+        type="button"
+        class="segment"
+        [class.active]="authMode === 'sign-up'"
+        (click)="setAuthMode('sign-up')"
+      >
+        Sign up
+        <small>Create a new account</small>
+      </button>
+    </div>
+
+    <form class="auth-form" (ngSubmit)="submit()">
+      <label>
+        <span>{{
+          authMode === "sign-in" ? "Username or email" : "Username"
+        }}</span>
+        <input
+          [(ngModel)]="loginUsername"
+          name="loginUsername"
+          type="text"
+          [attr.placeholder]="
+            authMode === 'sign-in' ? 'you@example.com' : 'yourname'
+          "
+        />
+      </label>
+      @if (authMode === "sign-up") {
+        <label>
+          <span>Email</span>
+          <input
+            [(ngModel)]="loginEmail"
+            name="loginEmail"
+            type="email"
+            placeholder="you@example.com"
+          />
+        </label>
+      }
+      <label>
+        <span>Password</span>
+        <input
+          [(ngModel)]="loginPassword"
+          name="loginPassword"
+          type="password"
+          [attr.placeholder]="
+            authMode === 'sign-in' ? 'Enter your password' : 'Choose a password'
+          "
+        />
+      </label>
+      @if (authMode === "sign-up") {
+        <label>
+          <span>Confirm password</span>
+          <input
+            [(ngModel)]="loginConfirmPassword"
+            name="loginConfirmPassword"
+            type="password"
+            placeholder="Repeat your password"
+          />
+        </label>
+      }
+      <button type="submit" class="ghost auth-submit">
+        {{ authMode === "sign-in" ? "Login" : "Sign up" }}
+      </button>
+    </form>
+
+    @if (authError) {
+      <p class="error">{{ authError }}</p>
+    }
+    <p class="saved-state">
+      {{
+        authMode === "sign-in"
+          ? "Use sign up if you need to create a new account."
+          : "New accounts are created locally on submit."
+      }}
+    </p>
+  </section>
+</main>

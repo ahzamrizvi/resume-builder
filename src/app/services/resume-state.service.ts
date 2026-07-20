@@ -1,6 +1,6 @@
-import { CommonModule, isPlatformBrowser } from '@angular/common';
-import { Component, HostListener, inject, OnInit, PLATFORM_ID } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import { isPlatformBrowser } from '@angular/common';
+import { Injectable, inject, PLATFORM_ID, signal } from '@angular/core';
+import { Router } from '@angular/router';
 
 import {
   AuthMode,
@@ -23,24 +23,24 @@ import {
   TWO_SIDE_TEMPLATES,
   UserSession,
   WorkspaceState,
-} from './models/resume.models';
-import { ResumeStorageService } from './services/resume-storage.service';
+} from '../models/resume.models';
+import { ResumeStorageService } from './resume-storage.service';
+import { AuthService } from './auth.service';
 
 const STORAGE_KEY = 'br-resume-state';
 
-@Component({
-  selector: 'app-root',
-  imports: [CommonModule, FormsModule],
-  templateUrl: './app.html',
-  styleUrl: './app.css',
-})
-export class App implements OnInit {
+@Injectable({ providedIn: 'root' })
+export class ResumeStateService {
   private readonly platformId = inject(PLATFORM_ID);
   private readonly browser = isPlatformBrowser(this.platformId);
   private readonly resumeStorage = inject(ResumeStorageService);
+  private readonly auth = inject(AuthService);
+  protected readonly router = inject(Router);
+  private readonly apiBaseUrl = this.resolveApiBaseUrl();
+  private readonly workspaceApiUrl = this.apiBaseUrl ? `${this.apiBaseUrl}/api/workspace` : '/api/workspace';
 
-  protected readonly title = 'BUILD YOUR RESUME';
-  protected readonly templateOptions: Array<{
+  public readonly title = 'BUILD YOUR RESUME';
+  public readonly templateOptions: Array<{
     key: TemplateKey;
     label: string;
     description: string;
@@ -83,7 +83,7 @@ export class App implements OnInit {
       layout: 'single',
     },
   ];
-  protected readonly sectionLabels: Record<SectionKey, string> = {
+  public readonly sectionLabels: Record<SectionKey, string> = {
     personal: 'Personal details',
     summary: 'Summary',
     experience: 'Experience',
@@ -91,7 +91,7 @@ export class App implements OnInit {
     education: 'Education',
     skills: 'Skills',
   };
-  protected readonly sectionDescriptions: Record<SectionKey, string> = {
+  public readonly sectionDescriptions: Record<SectionKey, string> = {
     personal: 'Contact and identity fields.',
     summary: 'Short profile statement.',
     experience: 'Work history and impact.',
@@ -100,65 +100,40 @@ export class App implements OnInit {
     skills: 'Comma separated skills list.',
   };
 
-  protected isAuthenticated = false;
-  protected loginUsername = '';
-  protected loginEmail = '';
-  protected loginPassword = '';
-  protected loginConfirmPassword = '';
-  protected authMode: AuthMode = 'sign-in';
-  protected authError = '';
-  protected currentUser: UserSession | null = null;
-  protected profiles: ResumeProfile[] = [];
-  protected activeProfileId = '';
-  protected activeProfileNameDraft = '';
-  protected isHeaderMenuOpen = false;
-  protected activeScreen: 'list' | 'editor' = 'list';
-  protected resume: ResumeState = this.createDefaultResume();
-  protected atsReport: AtsReport = this.buildAtsReport(this.resume);
-  protected draggingSection: SectionKey | null = null;
-  protected dragArmedSection: SectionKey | null = null;
-  protected importError = '';
-  protected lastSavedLabel = '';
-  protected saveToastMessage = '';
-  protected isSaveToastVisible = false;
-  protected previewScale = 1;
-  protected previewPages: Array<{ sections: SectionKey[] }> = [];
+  public loginUsername = signal('');
+  public loginEmail = signal('');
+  public loginPassword = signal('');
+  public loginConfirmPassword = signal('');
+  public authMode = signal<AuthMode>('sign-in');
+  public authError = signal('');
+  public currentUser: UserSession | null = null;
+  public profiles = signal<ResumeProfile[]>([]);
+  public activeProfileId = signal('');
+  public activeProfileNameDraft = signal('');
+  public isHeaderMenuOpen = signal(false);
+  public activeScreen = signal<'list' | 'editor'>('list');
+  public resume: ResumeState = this.createDefaultResume();
+  public atsReport: AtsReport = this.buildAtsReport(this.resume);
+  public draggingSection = signal<SectionKey | null>(null);
+  public dragArmedSection = signal<SectionKey | null>(null);
+  public importError = signal('');
+  public lastSavedLabel = signal('');
+  public saveToastMessage = signal('');
+  public isSaveToastVisible = signal(false);
+  public previewScale = signal(1);
+  public previewPages = signal<Array<{ sections: SectionKey[] }>>([]);
   private saveToastTimer: ReturnType<typeof setTimeout> | null = null;
-  protected isDrawerSettingsOpen = false;
-  protected readonly drawerItems: DrawerItem[] = [
+  public isDrawerSettingsOpen = signal(false);
+  public readonly drawerItems: DrawerItem[] = [
     { label: 'All Resume', icon: 'list', action: 'go-to-list' },
     { label: 'Logout', icon: 'logout', action: 'logout' },
   ];
 
-  @HostListener('document:click', ['$event'])
-  protected onDocumentClick(event: MouseEvent): void {
-    if (!this.isHeaderMenuOpen) {
-      return;
-    }
-
-    const target = event.target as HTMLElement | null;
-    if (!target) {
-      return;
-    }
-
-    if (target.closest('.header-drawer') || target.closest('.hamburger-btn')) {
-      return;
-    }
-
-    this.closeHeaderMenu();
-  }
-
-  @HostListener('window:resize')
-  protected onWindowResize(): void {
-    this.updatePreviewScale();
-    this.updatePreviewPages();
-  }
-
-  ngOnInit(): void {
+  public async initialize(): Promise<void> {
     if (this.browser) {
-      this.restoreSession();
-      if (this.isAuthenticated) {
-        this.restoreWorkspace();
+      await this.auth.initialize();
+      if (this.auth.session) {
+        await this.restoreWorkspace();
       }
       this.updateDerivedState();
       this.updatePreviewScale();
@@ -204,7 +179,7 @@ export class App implements OnInit {
   }
 
   get activeProfile(): ResumeProfile | null {
-    return this.profiles.find((profile) => profile.id === this.activeProfileId) ?? null;
+    return this.profiles().find((profile) => profile.id === this.activeProfileId()) ?? null;
   }
 
   get activeProfileLabel(): string {
@@ -212,11 +187,11 @@ export class App implements OnInit {
   }
 
   get currentUserName(): string {
-    return (this.currentUser?.username || '').toLowerCase();
+    return (this.auth.session?.username || '').toLowerCase();
   }
 
   get currentUserAvatar(): string {
-    const source = this.currentUser?.username || this.currentUser?.displayName || 'U';
+    const source = this.auth.session?.username || this.auth.session?.displayName || 'U';
     return source
       .split(/\s+/)
       .filter(Boolean)
@@ -226,11 +201,15 @@ export class App implements OnInit {
       .slice(0, 2);
   }
 
-  get hasProfiles(): boolean {
-    return this.profiles.length > 0;
+  public get session(): UserSession | null {
+    return this.auth.session;
   }
 
-  protected persistState(statusLabel?: string): void {
+  get hasProfiles(): boolean {
+    return this.profiles().length > 0;
+  }
+
+  public persistState(statusLabel?: string): void {
     this.updateDerivedState();
 
     if (!this.browser) {
@@ -239,30 +218,29 @@ export class App implements OnInit {
 
     const activeProfile = this.activeProfile;
     if (activeProfile) {
-      activeProfile.name = this.activeProfileNameDraft.trim() || activeProfile.name;
+      activeProfile.name = this.activeProfileNameDraft().trim() || activeProfile.name;
       activeProfile.resume = this.resume;
       activeProfile.updatedAt = new Date().toISOString();
     }
 
     this.saveWorkspace();
-    this.lastSavedLabel = activeProfile ? statusLabel ?? `${this.activeProfileLabel} saved locally` : '';
+    this.lastSavedLabel.set(activeProfile ? statusLabel ?? `${this.activeProfileLabel} saved locally` : '');
     if (statusLabel) {
       this.showSaveToast(statusLabel);
     }
   }
 
-  protected openResumeList(): void {
-    this.persistState();
-    this.activeScreen = 'list';
-    this.saveWorkspace();
+  public openResumeList(): void {
+    this.activeScreen.set('list');
+    void this.router.navigateByUrl('/resumes');
     this.closeHeaderMenu();
   }
 
-  protected profileScore(profile: ResumeProfile): number {
+  public profileScore(profile: ResumeProfile): number {
     return this.buildAtsReport(profile.resume).score;
   }
 
-  protected profileDisplayName(profile: ResumeProfile): string {
+  public profileDisplayName(profile: ResumeProfile): string {
     const fullName = [profile.resume.personal.firstName, profile.resume.personal.surname]
       .filter(Boolean)
       .join(' ')
@@ -271,7 +249,7 @@ export class App implements OnInit {
     return fullName || 'Untitled';
   }
 
-  protected profileScoreClass(profile: ResumeProfile): string {
+  public profileScoreClass(profile: ResumeProfile): string {
     const score = this.profileScore(profile);
     return score >= 85 ? 'good' : score < 60 ? 'warn' : 'neutral';
   }
@@ -280,23 +258,23 @@ export class App implements OnInit {
     return `${this.profileScore(profile)}`;
   }
 
-  protected toggleHeaderMenu(): void {
-    this.isHeaderMenuOpen = !this.isHeaderMenuOpen;
-    if (!this.isHeaderMenuOpen) {
-      this.isDrawerSettingsOpen = false;
+  public toggleHeaderMenu(): void {
+    this.isHeaderMenuOpen.update((value) => !value);
+    if (!this.isHeaderMenuOpen()) {
+      this.isDrawerSettingsOpen.set(false);
     }
   }
 
-  protected closeHeaderMenu(): void {
-    this.isHeaderMenuOpen = false;
-    this.isDrawerSettingsOpen = false;
+  public closeHeaderMenu(): void {
+    this.isHeaderMenuOpen.set(false);
+    this.isDrawerSettingsOpen.set(false);
   }
 
-  protected toggleDrawerSettings(): void {
-    this.isDrawerSettingsOpen = !this.isDrawerSettingsOpen;
+  public toggleDrawerSettings(): void {
+    this.isDrawerSettingsOpen.update((value) => !value);
   }
 
-  protected onDrawerItemClick(action: DrawerItem['action']): void {
+  public onDrawerItemClick(action: DrawerItem['action']): void {
     if (action === 'close') {
       this.closeHeaderMenu();
       return;
@@ -326,17 +304,17 @@ export class App implements OnInit {
 
   }
 
-  protected setAuthMode(mode: AuthMode): void {
-    this.authMode = mode;
-    this.authError = '';
+  public setAuthMode(mode: AuthMode): void {
+    this.authMode.set(mode);
+    this.authError.set('');
   }
 
   protected signIn(): void {
-    const identifier = this.loginUsername.trim();
-    const password = this.loginPassword.trim();
+    const identifier = this.loginUsername().trim();
+    const password = this.loginPassword().trim();
 
     if (!identifier || !password) {
-      this.authError = 'Enter a username or email and password.';
+      this.authError.set('Enter a username or email and password.');
       return;
     }
 
@@ -346,12 +324,12 @@ export class App implements OnInit {
     );
 
     if (!existingUser) {
-      this.authError = 'User does not exist. Sign up to create an account.';
+      this.authError.set('User does not exist. Sign up to create an account.');
       return;
     }
 
     if (existingUser.password !== password) {
-      this.authError = 'Invalid password for this user.';
+      this.authError.set('Invalid password for this user.');
       return;
     }
 
@@ -359,18 +337,18 @@ export class App implements OnInit {
   }
 
   protected signUp(): void {
-    const username = this.loginUsername.trim();
-    const email = this.loginEmail.trim();
-    const password = this.loginPassword.trim();
-    const confirmPassword = this.loginConfirmPassword.trim();
+    const username = this.loginUsername().trim();
+    const email = this.loginEmail().trim();
+    const password = this.loginPassword().trim();
+    const confirmPassword = this.loginConfirmPassword().trim();
 
     if (!username || !email || !password || !confirmPassword) {
-      this.authError = 'Enter a username, email, password, and confirm the password.';
+      this.authError.set('Enter a username, email, password, and confirm the password.');
       return;
     }
 
     if (password !== confirmPassword) {
-      this.authError = 'Passwords do not match.';
+      this.authError.set('Passwords do not match.');
       return;
     }
 
@@ -380,7 +358,7 @@ export class App implements OnInit {
     );
 
     if (existingUser) {
-      this.authError = 'An account already exists with that username or email.';
+      this.authError.set('An account already exists with that username or email.');
       return;
     }
 
@@ -392,13 +370,13 @@ export class App implements OnInit {
     );
     users.push(newUser);
     this.resumeStorage.saveUsers(users);
-    this.lastSavedLabel = 'Created a new local account';
+    this.lastSavedLabel.set('Created a new local account');
 
     this.finishAuth(newUser);
   }
 
-  protected login(): void {
-    if (this.authMode === 'sign-up') {
+  public login(): void {
+    if (this.authMode() === 'sign-up') {
       this.signUp();
       return;
     }
@@ -412,96 +390,101 @@ export class App implements OnInit {
       displayName: user.displayName,
     };
 
-    this.isAuthenticated = true;
     this.currentUser = authenticatedUser;
-    this.authError = '';
+    this.authError.set('');
 
     this.resumeStorage.saveSession(this.currentUser);
 
     this.restoreWorkspace();
     this.updateDerivedState();
+    void this.router.navigateByUrl('/resumes');
   }
 
-  protected logout(): void {
-    this.isAuthenticated = false;
+  public logout(): void {
+    this.auth.logout();
     this.currentUser = null;
-    this.profiles = [];
-    this.activeProfileId = '';
-    this.activeProfileNameDraft = '';
-    this.activeScreen = 'list';
+    this.profiles.set([]);
+    this.activeProfileId.set('');
+    this.activeProfileNameDraft.set('');
+    this.activeScreen.set('list');
     this.resume = this.createDefaultResume();
     this.atsReport = this.buildAtsReport(this.resume);
-    this.authMode = 'sign-in';
+    this.authMode.set('sign-in');
 
     this.resumeStorage.clearSession();
-    this.loginPassword = '';
-    this.loginEmail = '';
-    this.loginConfirmPassword = '';
+    this.loginPassword.set('');
+    this.loginEmail.set('');
+    this.loginConfirmPassword.set('');
+    void this.router.navigateByUrl('/login');
   }
 
-  protected createProfile(): void {
+  public createProfile(): void {
     const profile = this.resumeStorage.createResumeProfile(
-      `Resume ${this.profiles.length + 1}`,
+      `Resume ${this.profiles().length + 1}`,
       this.createDefaultResume(),
     );
-    this.profiles = [...this.profiles, profile];
-    this.activeProfileId = profile.id;
+    this.profiles.set([...this.profiles(), profile]);
+    this.activeProfileId.set(profile.id);
     this.resume = profile.resume;
-    this.activeProfileNameDraft = profile.name;
-    this.activeScreen = 'editor';
+    this.activeProfileNameDraft.set(profile.name);
+    this.activeScreen.set('editor');
     this.persistState();
     this.showSaveToast('New resume saved');
+    void this.createProfileOnBackend(profile);
+    void this.router.navigate(['/builder', profile.id]);
   }
 
-  protected createFirstResume(): void {
+  public createFirstResume(): void {
     this.createProfile();
   }
 
-  protected selectProfile(profileId: string): void {
-    this.persistState();
-
-    const profile = this.profiles.find((entry) => entry.id === profileId);
+  public selectProfile(profileId: string): void {
+    const profile = this.profiles().find((entry) => entry.id === profileId);
     if (!profile) {
       return;
     }
 
-    this.activeProfileId = profile.id;
+    this.activeProfileId.set(profile.id);
     this.resume = profile.resume;
-    this.activeProfileNameDraft = profile.name;
+    this.activeProfileNameDraft.set(profile.name);
     this.atsReport = this.buildAtsReport(this.resume);
-    this.activeScreen = 'editor';
-    this.saveWorkspace();
+    this.activeScreen.set('editor');
+    void this.activateProfileOnBackend(profileId);
+    void this.router.navigate(['/builder', profile.id]);
   }
 
-  protected deleteProfile(profileId: string): void {
-    const nextProfiles = this.profiles.filter((profile) => profile.id !== profileId);
-    const deletedActiveProfile = this.activeProfileId === profileId;
+  public deleteProfile(profileId: string): void {
+    const nextProfiles = this.profiles().filter((profile) => profile.id !== profileId);
+    const deletedActiveProfile = this.activeProfileId() === profileId;
 
-    this.profiles = nextProfiles;
+    this.profiles.set(nextProfiles);
 
     if (nextProfiles.length === 0) {
-      this.activeProfileId = '';
-      this.activeProfileNameDraft = '';
+      this.activeProfileId.set('');
+      this.activeProfileNameDraft.set('');
       this.resume = this.createDefaultResume();
-      this.activeScreen = 'list';
+      this.activeScreen.set('list');
       this.persistState();
+      void this.deleteProfileOnBackend(profileId);
+      void this.router.navigateByUrl('/resumes');
       return;
     }
 
     if (deletedActiveProfile) {
       const nextActive = nextProfiles[0];
-      this.activeProfileId = nextActive.id;
+      this.activeProfileId.set(nextActive.id);
       this.resume = nextActive.resume;
-      this.activeProfileNameDraft = nextActive.name;
+      this.activeProfileNameDraft.set(nextActive.name);
       this.atsReport = this.buildAtsReport(this.resume);
     }
 
     this.persistState();
+    void this.deleteProfileOnBackend(profileId);
   }
 
-  protected renameActiveProfile(name: string): void {
+  public renameActiveProfile(name: string): void {
     const nextName = name.trim() || this.activeProfileLabel;
-    this.activeProfileNameDraft = nextName;
+    this.activeProfileNameDraft.set(nextName);
 
     const activeProfile = this.activeProfile;
     if (!activeProfile) {
@@ -511,30 +494,31 @@ export class App implements OnInit {
     activeProfile.name = nextName;
     activeProfile.updatedAt = new Date().toISOString();
     this.persistState();
+    void this.updateProfileOnBackend(activeProfile.id, nextName, this.resume);
   }
 
-  protected deleteActiveProfile(): void {
-    if (this.activeProfileId) {
-      this.deleteProfile(this.activeProfileId);
+  public deleteActiveProfile(): void {
+    if (this.activeProfileId()) {
+      this.deleteProfile(this.activeProfileId());
     }
   }
 
-  protected setTemplate(template: TemplateKey): void {
+  public setTemplate(template: TemplateKey): void {
     this.resume.template = template;
     this.persistState();
   }
 
-  protected setAccentColor(color: string): void {
+  public setAccentColor(color: string): void {
     this.resume.accentColor = color;
     this.persistState();
   }
 
-  protected setSidebarColor(color: string): void {
+  public setSidebarColor(color: string): void {
     this.resume.sidebarColor = color;
     this.persistState();
   }
 
-  protected downloadResume(): void {
+  public downloadResume(): void {
     if (!this.browser) {
       return;
     }
@@ -542,12 +526,12 @@ export class App implements OnInit {
     void this.buildResumePdf();
   }
 
-  protected addExperience(): void {
+  public addExperience(): void {
     this.resume.experience = [...this.resume.experience, this.createEmptyExperienceEntry()];
     this.persistState();
   }
 
-  protected removeExperience(index: number): void {
+  public removeExperience(index: number): void {
     if (this.resume.experience.length === 1) {
       return;
     }
@@ -556,12 +540,12 @@ export class App implements OnInit {
     this.persistState();
   }
 
-  protected addEducation(): void {
+  public addEducation(): void {
     this.resume.education = [...this.resume.education, this.createEmptyEducationEntry()];
     this.persistState();
   }
 
-  protected removeEducation(index: number): void {
+  public removeEducation(index: number): void {
     if (this.resume.education.length === 1) {
       return;
     }
@@ -570,12 +554,12 @@ export class App implements OnInit {
     this.persistState();
   }
 
-  protected addProject(): void {
+  public addProject(): void {
     this.resume.projects = [...this.resume.projects, this.createEmptyProjectEntry()];
     this.persistState();
   }
 
-  protected removeProject(index: number): void {
+  public removeProject(index: number): void {
     if (this.resume.projects.length === 1) {
       return;
     }
@@ -584,42 +568,42 @@ export class App implements OnInit {
     this.persistState();
   }
 
-  protected clearPhoto(): void {
+  public clearPhoto(): void {
     this.resume.personal.photoDataUrl = '';
     this.persistState();
   }
 
   private showSaveToast(message: string): void {
-    this.saveToastMessage = message;
-    this.isSaveToastVisible = true;
+    this.saveToastMessage.set(message);
+    this.isSaveToastVisible.set(true);
 
     if (this.saveToastTimer) {
       clearTimeout(this.saveToastTimer);
     }
 
     this.saveToastTimer = setTimeout(() => {
-      this.isSaveToastVisible = false;
-      this.saveToastMessage = '';
+      this.isSaveToastVisible.set(false);
+      this.saveToastMessage.set('');
       this.saveToastTimer = null;
     }, 2200);
   }
 
-  private updatePreviewScale(): void {
+  public updatePreviewScale(): void {
     if (!this.browser) {
-      this.previewScale = 1;
+      this.previewScale.set(1);
       return;
     }
 
     const availableWidth = Math.max(280, window.innerWidth - 24);
     const baseScale = Math.min(1, availableWidth / 794);
-    this.previewScale = baseScale;
+    this.previewScale.set(baseScale);
   }
 
-  private updatePreviewPages(): void {
+  public updatePreviewPages(): void {
     const sections = [...this.orderedSections];
 
     if (this.isTwoSideTemplate) {
-      this.previewPages = [{ sections }];
+      this.previewPages.set([{ sections }]);
       return;
     }
 
@@ -647,7 +631,7 @@ export class App implements OnInit {
       pages.push({ sections: current });
     }
 
-    this.previewPages = pages;
+    this.previewPages.set(pages);
   }
 
   private estimateSectionHeight(section: SectionKey): number {
@@ -688,7 +672,7 @@ export class App implements OnInit {
     return Math.max(44, lines * 20 + 10);
   }
 
-  protected onPhotoSelected(event: Event): void {
+  public onPhotoSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
 
@@ -715,48 +699,49 @@ export class App implements OnInit {
     reader.readAsDataURL(file);
   }
 
-  protected onSectionDragHandleDown(section: SectionKey): void {
-    this.dragArmedSection = section;
+  public onSectionDragHandleDown(section: SectionKey): void {
+    this.dragArmedSection.set(section);
   }
 
-  protected onSectionDragStart(section: SectionKey, event: DragEvent): void {
-    if (this.dragArmedSection !== section) {
+  public onSectionDragStart(section: SectionKey, event: DragEvent): void {
+    if (this.dragArmedSection() !== section) {
       event.preventDefault();
       return;
     }
 
-    this.draggingSection = section;
+    this.draggingSection.set(section);
     event.dataTransfer?.setData('text/plain', section);
   }
 
-  protected onSectionDragOver(event: DragEvent): void {
+  public onSectionDragOver(event: DragEvent): void {
     event.preventDefault();
   }
 
-  protected onSectionDragEnd(): void {
-    this.draggingSection = null;
-    this.dragArmedSection = null;
+  public onSectionDragEnd(): void {
+    this.draggingSection.set(null);
+    this.dragArmedSection.set(null);
   }
 
-  protected onSectionDrop(targetSection: SectionKey): void {
-    if (!this.draggingSection || this.draggingSection === targetSection) {
+  public onSectionDrop(targetSection: SectionKey): void {
+    const draggingSection = this.draggingSection();
+    if (!draggingSection || draggingSection === targetSection) {
       return;
     }
 
     const nextOrder = [...this.resume.sectionOrder];
-    const fromIndex = nextOrder.indexOf(this.draggingSection);
+    const fromIndex = nextOrder.indexOf(draggingSection);
     const toIndex = nextOrder.indexOf(targetSection);
 
     if (fromIndex === -1 || toIndex === -1) {
-      this.draggingSection = null;
+      this.draggingSection.set(null);
       return;
     }
 
     nextOrder.splice(fromIndex, 1);
-    nextOrder.splice(toIndex, 0, this.draggingSection);
+    nextOrder.splice(toIndex, 0, draggingSection);
     this.resume.sectionOrder = nextOrder;
-    this.draggingSection = null;
-    this.dragArmedSection = null;
+    this.draggingSection.set(null);
+    this.dragArmedSection.set(null);
     this.persistState();
   }
 
@@ -765,81 +750,75 @@ export class App implements OnInit {
     this.updatePreviewPages();
   }
 
-  private restoreSession(): void {
+  private async restoreSession(): Promise<void> {
     if (!this.browser) {
       return;
     }
 
     const saved = this.resumeStorage.loadSession();
-    if (!saved) {
+    const session = saved ?? (await this.resumeStorage.loadSessionFromBackend());
+    if (!session) {
       return;
     }
 
-    const users = this.resumeStorage.loadUsers();
-    const user = users.find((entry) => entry.username === saved.username);
-
-    if (user) {
-      this.currentUser = {
-        username: user.username,
-        displayName: user.displayName,
-      };
-      this.isAuthenticated = true;
-    } else {
-      this.resumeStorage.clearSession();
-    }
+    this.currentUser = {
+      username: session.username,
+      displayName: session.displayName,
+    };
   }
 
-  private restoreWorkspace(): void {
+  private async restoreWorkspace(): Promise<void> {
     if (!this.browser) {
       return;
     }
 
-    if (!this.currentUser?.username) {
+    if (!this.auth.session?.username) {
       return;
     }
 
-    const saved = this.resumeStorage.loadWorkspace(this.currentUser.username);
+    const saved = this.resumeStorage.loadWorkspace(this.auth.session.username) ??
+      (await this.resumeStorage.loadWorkspaceFromBackend(this.auth.session.username));
     if (!saved) {
-      this.profiles = [];
-      this.activeProfileId = '';
-      this.activeProfileNameDraft = '';
+      this.profiles.set([]);
+      this.activeProfileId.set('');
+      this.activeProfileNameDraft.set('');
       this.resume = this.createDefaultResume();
-      this.activeScreen = 'list';
+      this.activeScreen.set('list');
       this.atsReport = this.buildAtsReport(this.resume);
-      this.lastSavedLabel = '';
+      this.lastSavedLabel.set('');
       return;
     }
 
     if (!Array.isArray(saved.profiles)) {
-      this.resumeStorage.saveWorkspace(this.currentUser.username, {
+      this.resumeStorage.saveWorkspace(this.auth.session.username, {
         profiles: [],
         activeProfileId: '',
         activeScreen: 'list',
       });
-      this.profiles = [];
-      this.activeProfileId = '';
-      this.activeProfileNameDraft = '';
+      this.profiles.set([]);
+      this.activeProfileId.set('');
+      this.activeProfileNameDraft.set('');
       this.resume = this.createDefaultResume();
-      this.activeScreen = 'list';
+      this.activeScreen.set('list');
       this.atsReport = this.buildAtsReport(this.resume);
-      this.lastSavedLabel = '';
+      this.lastSavedLabel.set('');
       return;
     }
 
-    this.profiles = saved.profiles
+    this.profiles.set(saved.profiles
       .map((profile) => this.normalizeProfile(profile))
-      .filter((profile): profile is ResumeProfile => profile !== null);
-    this.activeProfileId =
+      .filter((profile): profile is ResumeProfile => profile !== null));
+    this.activeProfileId.set(
       typeof saved.activeProfileId === 'string' &&
-      this.profiles.some((profile) => profile.id === saved.activeProfileId)
+      this.profiles().some((profile) => profile.id === saved.activeProfileId)
         ? saved.activeProfileId
-        : this.profiles[0]?.id ?? '';
+        : this.profiles()[0]?.id ?? '');
     const activeProfile = this.activeProfile;
     this.resume = activeProfile?.resume ?? this.createDefaultResume();
-    this.activeProfileNameDraft = activeProfile?.name ?? '';
-    this.activeScreen = saved.activeScreen === 'editor' ? 'editor' : 'list';
+    this.activeProfileNameDraft.set(activeProfile?.name ?? '');
+    this.activeScreen.set(saved.activeScreen === 'editor' ? 'editor' : 'list');
     this.atsReport = this.buildAtsReport(this.resume);
-    this.lastSavedLabel = this.profiles.length ? 'Loaded saved resumes' : '';
+    this.lastSavedLabel.set(this.profiles().length ? 'Loaded saved resumes' : '');
   }
 
   private saveWorkspace(): void {
@@ -847,17 +826,166 @@ export class App implements OnInit {
       return;
     }
 
-    if (!this.currentUser?.username) {
+    if (!this.auth.session?.username) {
       return;
     }
 
     const payload: WorkspaceState = {
-      profiles: this.profiles,
-      activeProfileId: this.activeProfileId,
-      activeScreen: this.activeScreen,
+      profiles: this.profiles(),
+      activeProfileId: this.activeProfileId(),
+      activeScreen: this.activeScreen(),
     };
 
-    this.resumeStorage.saveWorkspace(this.currentUser.username, payload);
+    this.resumeStorage.saveWorkspace(this.auth.session.username, payload);
+    void this.saveWorkspaceToBackend(payload);
+  }
+
+  private async saveWorkspaceToBackend(payload: WorkspaceState): Promise<void> {
+    if (!this.browser || !this.auth.token) {
+      return;
+    }
+
+    try {
+      await fetch(this.workspaceApiUrl, {
+        method: 'PUT',
+        headers: this.workspaceHeaders(),
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      // Keep local cache as fallback.
+    }
+  }
+
+  private async createProfileOnBackend(profile: ResumeProfile): Promise<void> {
+    if (!this.browser || !this.auth.token) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${this.workspaceApiUrl}/profiles`, {
+        method: 'POST',
+        headers: this.workspaceHeaders(),
+        body: JSON.stringify({ name: profile.name, resume: profile.resume }),
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = (await response.json()) as { workspace?: WorkspaceState };
+      if (payload.workspace) {
+        this.applyWorkspacePayload(payload.workspace);
+      }
+    } catch {
+      // Ignore backend sync issues.
+    }
+  }
+
+  private async activateProfileOnBackend(profileId: string): Promise<void> {
+    if (!this.browser || !this.auth.token) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${this.workspaceApiUrl}/active-profile/${encodeURIComponent(profileId)}`, {
+        method: 'POST',
+        headers: this.workspaceHeaders(),
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const workspace = (await response.json()) as WorkspaceState;
+      this.applyWorkspacePayload(workspace);
+    } catch {
+      // Ignore backend sync issues.
+    }
+  }
+
+  private async deleteProfileOnBackend(profileId: string): Promise<void> {
+    if (!this.browser || !this.auth.token) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${this.workspaceApiUrl}/profiles/${encodeURIComponent(profileId)}`, {
+        method: 'DELETE',
+        headers: this.workspaceHeaders(),
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const workspace = (await response.json()) as WorkspaceState;
+      this.applyWorkspacePayload(workspace);
+    } catch {
+      // Ignore backend sync issues.
+    }
+  }
+
+  private async updateProfileOnBackend(profileId: string, name: string, resume: ResumeState): Promise<void> {
+    if (!this.browser || !this.auth.token) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${this.workspaceApiUrl}/profiles/${encodeURIComponent(profileId)}`, {
+        method: 'PUT',
+        headers: this.workspaceHeaders(),
+        body: JSON.stringify({ name, resume }),
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const workspace = (await response.json()) as WorkspaceState;
+      this.applyWorkspacePayload(workspace);
+    } catch {
+      // Ignore backend sync issues.
+    }
+  }
+
+  private applyWorkspacePayload(workspace: WorkspaceState): void {
+    if (!workspace || !Array.isArray(workspace.profiles)) {
+      this.resetWorkspace();
+      return;
+    }
+
+    this.profiles.set(workspace.profiles
+      .map((profile) => this.normalizeProfile(profile))
+      .filter((profile): profile is ResumeProfile => profile !== null));
+    this.activeProfileId.set(
+      typeof workspace.activeProfileId === 'string' &&
+      this.profiles().some((profile) => profile.id === workspace.activeProfileId)
+        ? workspace.activeProfileId
+        : this.profiles()[0]?.id ?? '');
+    const activeProfile = this.activeProfile;
+    this.resume = activeProfile?.resume ?? this.createDefaultResume();
+    this.activeProfileNameDraft.set(activeProfile?.name ?? '');
+    this.activeScreen.set(workspace.activeScreen === 'editor' ? 'editor' : 'list');
+    this.atsReport = this.buildAtsReport(this.resume);
+    this.lastSavedLabel.set(this.profiles().length ? 'Loaded saved resumes' : '');
+  }
+
+  private resetWorkspace(): void {
+    this.profiles.set([]);
+    this.activeProfileId.set('');
+    this.activeProfileNameDraft.set('');
+    this.resume = this.createDefaultResume();
+    this.activeScreen.set('list');
+    this.atsReport = this.buildAtsReport(this.resume);
+    this.lastSavedLabel.set('');
+  }
+
+  private workspaceHeaders(): HeadersInit {
+    return {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...(this.auth.token ? { Authorization: `Bearer ${this.auth.token}` } : {}),
+    };
   }
 
   private createDefaultResume(): ResumeState {
@@ -897,6 +1025,19 @@ export class App implements OnInit {
     return typeof crypto !== 'undefined' && 'randomUUID' in crypto
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  private resolveApiBaseUrl(): string {
+    if (!this.browser) {
+      return '';
+    }
+
+    const { hostname, origin } = window.location;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://localhost:5000';
+    }
+
+    return origin;
   }
 
   private normalizeImportedState(raw: unknown): ResumeState {

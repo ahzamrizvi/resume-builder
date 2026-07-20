@@ -11,11 +11,23 @@ import {
 const USERS_KEY = 'br-resume-users';
 const SESSION_KEY = 'br-resume-session';
 const WORKSPACE_KEY = 'br-resume-workspace';
+const TOKEN_KEY = 'br-resume-token';
 
 @Injectable({ providedIn: 'root' })
 export class ResumeStorageService {
   private readonly platformId = inject(PLATFORM_ID);
   private readonly browser = isPlatformBrowser(this.platformId);
+  private readonly apiBaseUrl = this.resolveApiBaseUrl();
+  private readonly workspaceApiUrl = this.apiBaseUrl ? `${this.apiBaseUrl}/api/workspace` : '/api/workspace';
+  private readonly syncReadyPromise: Promise<void>;
+
+  constructor() {
+    this.syncReadyPromise = Promise.resolve();
+  }
+
+  ready(): Promise<void> {
+    return this.syncReadyPromise;
+  }
 
   loadUsers(): AuthUserRecord[] {
     if (!this.browser) {
@@ -80,6 +92,10 @@ export class ResumeStorageService {
     }
   }
 
+  async loadSessionFromBackend(): Promise<UserSession | null> {
+    return null;
+  }
+
   clearSession(): void {
     if (this.browser) {
       window.localStorage.removeItem(SESSION_KEY);
@@ -92,16 +108,15 @@ export class ResumeStorageService {
     }
 
     const saved = window.localStorage.getItem(this.getWorkspaceKey(username));
-    if (!saved) {
+    return saved ? (JSON.parse(saved) as WorkspaceState) : null;
+  }
+
+  async loadWorkspaceFromBackend(username: string): Promise<WorkspaceState | null> {
+    if (!this.browser || !username) {
       return null;
     }
 
-    try {
-      return JSON.parse(saved) as WorkspaceState;
-    } catch {
-      window.localStorage.removeItem(this.getWorkspaceKey(username));
-      return null;
-    }
+    return this.fetchWorkspaceToCache(username);
   }
 
   saveWorkspace(username: string, state: WorkspaceState): void {
@@ -109,7 +124,9 @@ export class ResumeStorageService {
       return;
     }
 
-    window.localStorage.setItem(this.getWorkspaceKey(username), JSON.stringify(state));
+    const storageKey = this.getWorkspaceKey(username);
+    window.localStorage.setItem(storageKey, JSON.stringify(state));
+    void this.pushWorkspaceToBackend(state);
   }
 
   createUserRecord(
@@ -178,6 +195,59 @@ export class ResumeStorageService {
     return typeof crypto !== 'undefined' && 'randomUUID' in crypto
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  private resolveApiBaseUrl(): string {
+    if (!this.browser) {
+      return '';
+    }
+
+    const { hostname, origin } = window.location;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://localhost:5000';
+    }
+
+    return origin;
+  }
+
+  private async pushWorkspaceToBackend(state: WorkspaceState): Promise<void> {
+    try {
+      await fetch(this.workspaceApiUrl, {
+        method: 'PUT',
+        headers: this.workspaceHeaders(),
+        body: JSON.stringify(state),
+      });
+    } catch {
+      // Ignore backend sync errors; localStorage remains the fallback cache.
+    }
+  }
+
+  private async fetchWorkspaceToCache(username: string): Promise<WorkspaceState | null> {
+    try {
+      const response = await fetch(this.workspaceApiUrl, {
+        headers: this.workspaceHeaders(),
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const workspace = (await response.json()) as WorkspaceState;
+      window.localStorage.setItem(this.getWorkspaceKey(username), JSON.stringify(workspace));
+      return workspace;
+    } catch {
+      // Ignore backend sync errors.
+      return null;
+    }
+  }
+
+  private workspaceHeaders(): HeadersInit {
+    const token = this.browser ? window.localStorage.getItem(TOKEN_KEY) : null;
+    return {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
   }
 
   private getWorkspaceKey(username: string): string {

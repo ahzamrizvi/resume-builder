@@ -1,0 +1,439 @@
+<header class="site-header" [ngStyle]="accentStyle">
+  @if (!isHeaderMenuOpen) {
+    <button
+      type="button"
+      class="hamburger-btn ghost"
+      (click)="toggleHeaderMenu()"
+      [attr.aria-expanded]="isHeaderMenuOpen"
+      aria-label="Toggle header menu"
+    >
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+  }
+  <div class="site-brand">
+    <span class="site-mark">BR</span>
+    <div>
+      <p class="eyebrow">Resume studio</p>
+      <h1>{{ title }}</h1>
+      <p class="site-subtitle">Build, manage, and export resume profiles in one place.</p>
+    </div>
+  </div>
+</header>
+<aside class="header-drawer" [class.open]="isHeaderMenuOpen" aria-label="Header menu">
+  <div class="header-profile-panel">
+    <div class="drawer-top">
+      <div class="drawer-user">
+        <div class="drawer-avatar">{{ currentUserAvatar }}</div>
+        <div>
+          <strong>{{ currentUserName }}</strong>
+          <p>{{ currentUser?.username }}</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        class="hamburger-btn ghost drawer-toggle"
+        (click)="closeHeaderMenu()"
+        aria-label="Close header menu"
+      >
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </div>
+
+    <nav class="drawer-nav" aria-label="Primary navigation">
+      @for (item of drawerItems; track item.action) {
+        <button
+          type="button"
+          class="drawer-nav-item"
+          (click)="onDrawerItemClick(item.action)"
+        >
+          <span class="drawer-nav-icon">
+            @switch (item.icon) {
+              @case ('list') {
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              }
+              @case ('logout') {
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M10 17l5-5-5-5M15 12H3m9 8H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              }
+            }
+          </span>
+          <span class="drawer-nav-label">{{ item.label }}</span>
+        </button>
+      }
+    </nav>
+  </div>
+</aside>
+<main class="shell" [ngStyle]="accentStyle">
+  @if (isSaveToastVisible) {
+    <div class="save-toast">{{ saveToastMessage }}</div>
+  }
+  <section class="panel editor">
+    <header class="panel-header">
+      <div class="title-row">
+        <div>
+          <h2 class="panel-title">Editor</h2>
+          <p class="lede">Edit once, switch templates, and keep the whole profile in sync.</p>
+        </div>
+        <div class="editor-actions">
+          <button type="button" class="ghost back-home-btn" (click)="openResumeList()">Back to Home</button>
+          <button type="button" class="ghost" (click)="persistState('Resume saved')">Save resume</button>
+        </div>
+      </div>
+    </header>
+
+    <form class="editor-form" (input)="persistState()">
+      @for (section of orderedSections; track section) {
+        <div
+          class="section"
+          [attr.draggable]="dragArmedSection === section ? 'true' : 'false'"
+          (dragstart)="onSectionDragStart(section, $event)"
+          (dragend)="onSectionDragEnd()"
+          (dragover)="onSectionDragOver($event)"
+          (drop)="onSectionDrop(section)"
+          [class.dragging]="draggingSection === section"
+        >
+          <div class="section-head">
+            <div>
+              <h2>{{ sectionLabels[section] }}</h2>
+              <p class="section-note">{{ sectionDescriptions[section] }}</p>
+            </div>
+            <button type="button" class="drag-handle" (mousedown)="onSectionDragHandleDown(section)">
+              Drag to reorder
+            </button>
+          </div>
+
+          @switch (section) {
+            @case ('personal') {
+              <div class="grid two">
+                <label><span>First name</span><input [(ngModel)]="resume.personal.firstName" name="firstName" type="text" placeholder="Name" /></label>
+                <label><span>Surname</span><input [(ngModel)]="resume.personal.surname" name="surname" type="text" placeholder="Last name" /></label>
+                <label><span>Role title</span><input [(ngModel)]="resume.personal.role" name="role" type="text" placeholder="Frontend Developer" /></label>
+                <label><span>Email</span><input [(ngModel)]="resume.personal.email" name="email" type="email" placeholder="abc@email.com" /></label>
+                <label><span>Phone</span><input [(ngModel)]="resume.personal.phone" name="phone" type="text" placeholder="+91 xxxxx xxxxx" /></label>
+                <label class="full"><span>Location</span><input [(ngModel)]="resume.personal.location" name="location" type="text" placeholder="Bengaluru, India" /></label>
+                <label><span>LinkedIn</span><input [(ngModel)]="resume.personal.linkedin" name="linkedin" type="text" placeholder="linkedin.com/in/yourname" /></label>
+                <label><span>GitHub</span><input [(ngModel)]="resume.personal.github" name="github" type="text" placeholder="github.com/yourname" /></label>
+                <label class="full"><span>Profile photo</span><input type="file" accept="image/*" (change)="onPhotoSelected($event)" /></label>
+                <button type="button" class="ghost" (click)="clearPhoto()" [disabled]="!resume.personal.photoDataUrl">Remove photo</button>
+              </div>
+            }
+            @case ('summary') {
+              <label class="full"><span>Profile summary</span><textarea [(ngModel)]="resume.summary" name="summary" rows="4"></textarea></label>
+            }
+            @case ('experience') {
+              <div class="section-head section-actions">
+                <span class="hint">Work history and impact.</span>
+                <button type="button" class="ghost" (click)="addExperience()">Add role</button>
+              </div>
+
+              @for (item of resume.experience; track item; let i = $index) {
+                <article class="entry">
+                  <div class="section-head compact">
+                    <h3>Role {{ i + 1 }}</h3>
+                    <button type="button" class="icon-btn" (click)="removeExperience(i)" [disabled]="resume.experience.length === 1">Remove</button>
+                  </div>
+                  <div class="grid two">
+                    <label class="full"><span>Company</span><input [(ngModel)]="item.company" [name]="'company-' + i" type="text" /></label>
+                    <label><span>Position</span><input [(ngModel)]="item.position" [name]="'position-' + i" type="text" /></label>
+                    <label><span>Period</span><input [(ngModel)]="item.period" [name]="'period-' + i" type="text" /></label>
+                    <label class="full"><span>Highlights</span><textarea [(ngModel)]="item.highlights" [name]="'highlights-' + i" rows="3"></textarea></label>
+                  </div>
+                </article>
+              }
+            }
+            @case ('projects') {
+              <div class="section-head section-actions">
+                <span class="hint">Portfolio projects and links.</span>
+                <button type="button" class="ghost" (click)="addProject()">Add project</button>
+              </div>
+
+              @for (item of resume.projects; track item; let i = $index) {
+                <article class="entry">
+                  <div class="section-head compact">
+                    <h3>Project {{ i + 1 }}</h3>
+                    <button type="button" class="icon-btn" (click)="removeProject(i)" [disabled]="resume.projects.length === 1">Remove</button>
+                  </div>
+                  <div class="grid two">
+                    <label class="full"><span>Project name</span><input [(ngModel)]="item.name" [name]="'project-name-' + i" type="text" placeholder="Resume Builder" /></label>
+                    <label class="full"><span>Description</span><textarea [(ngModel)]="item.description" [name]="'project-description-' + i" rows="3" placeholder="Describe what you built and what it does."></textarea></label>
+                    <label class="full"><span>Link</span><input [(ngModel)]="item.link" [name]="'project-link-' + i" type="text" placeholder="github.com/yourname/project" /></label>
+                    <label class="full"><span>Technologies used</span><input [(ngModel)]="item.technologiesUsed" [name]="'project-technologies-' + i" type="text" placeholder="Angular, TypeScript, CSS" /></label>
+                  </div>
+                </article>
+              }
+            }
+            @case ('education') {
+              <div class="section-head section-actions">
+                <span class="hint">Academic background.</span>
+                <button type="button" class="ghost" (click)="addEducation()">Add school</button>
+              </div>
+
+              @for (item of resume.education; track item; let i = $index) {
+                <article class="entry">
+                  <div class="section-head compact">
+                    <h3>Education {{ i + 1 }}</h3>
+                    <button type="button" class="icon-btn" (click)="removeEducation(i)" [disabled]="resume.education.length === 1">Remove</button>
+                  </div>
+                  <div class="grid two">
+                    <label class="full"><span>Institution</span><input [(ngModel)]="item.school" [name]="'school-' + i" type="text" /></label>
+                    <label><span>Degree</span><input [(ngModel)]="item.degree" [name]="'degree-' + i" type="text" /></label>
+                    <label><span>Year</span><input [(ngModel)]="item.year" [name]="'year-' + i" type="text" /></label>
+                  </div>
+                </article>
+              }
+            }
+            @case ('skills') {
+              <label class="full"><span>Comma-separated skills</span><input [(ngModel)]="resume.skills" name="skills" type="text" placeholder="Angular, TypeScript, UX writing" /></label>
+            }
+          }
+        </div>
+      }
+
+      <section class="template-gallery">
+        <div class="section-head">
+          <h2>Template gallery</h2>
+        </div>
+        <div class="template-controls">
+          <div class="toolbar-group">
+            <span class="toolbar-label">Accent color</span>
+            <label class="color-picker">
+              <input type="color" [ngModel]="resume.accentColor" (ngModelChange)="setAccentColor($event)" name="accentColor" />
+              <span>{{ resume.accentColor }}</span>
+            </label>
+          </div>
+          <div class="toolbar-group">
+            <span class="toolbar-label">Sidebar color</span>
+            <label class="color-picker">
+              <input type="color" [ngModel]="resume.sidebarColor" (ngModelChange)="setSidebarColor($event)" name="sidebarColor" />
+              <span>{{ resume.sidebarColor }}</span>
+            </label>
+          </div>
+        </div>
+        <div class="template-grid">
+          @for (option of templateOptions; track option.key) {
+            <button type="button" class="template-card" [class.active]="resume.template === option.key" (click)="setTemplate(option.key)">
+              <div class="template-thumb" [ngClass]="'template-' + option.key">
+                <div class="thumb-top"></div>
+                <div class="thumb-body">
+                  <div class="thumb-sidebar"></div>
+                  <div class="thumb-content">
+                    <div class="thumb-line wide"></div>
+                    <div class="thumb-line"></div>
+                    <div class="thumb-line short"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="template-card-meta">
+                <div class="card-meta-row">
+                  <strong>{{ option.label }}</strong>
+                  <span class="layout-badge">{{ option.layout === 'two-side' ? 'Two-side' : 'Single' }}</span>
+                </div>
+                <span>{{ option.description }}</span>
+              </div>
+            </button>
+          }
+        </div>
+      </section>
+
+      <section class="ats-panel">
+        <div class="section-head">
+          <h2>ATS checker</h2>
+          <span class="score" [class.good]="atsReport.score >= 85" [class.warn]="atsReport.score < 85">{{ atsReport.score }}/100</span>
+        </div>
+        <p class="lede">{{ atsReport.verdict }}</p>
+        <div class="analysis">
+          <div>
+            <h3>Strengths</h3>
+            <ul>
+              @for (item of atsReport.strengths; track item) {
+                <li>{{ item }}</li>
+              } @empty {
+                <li>No strengths detected yet.</li>
+              }
+            </ul>
+          </div>
+          <div>
+            <h3>Warnings</h3>
+            <ul>
+              @for (item of atsReport.warnings; track item) {
+                <li>{{ item }}</li>
+              } @empty {
+                <li>No warnings.</li>
+              }
+            </ul>
+          </div>
+        </div>
+        <p class="saved-state">{{ lastSavedLabel }}</p>
+        @if (importError) {
+          <p class="error">{{ importError }}</p>
+        }
+      </section>
+
+      <div class="download-footer">
+        <button type="button" class="ghost download-btn" (click)="downloadResume()">Download PDF</button>
+      </div>
+    </form>
+  </section>
+
+  <aside class="panel preview" [ngClass]="templateClass">
+    <div class="preview-frame" [style.--preview-scale]="previewScale">
+      @if (!isTwoSideTemplate) {
+        @for (page of previewPages; track $index; let pageIndex = $index) {
+          <section class="preview-page">
+            @if (pageIndex === 0) {
+              <header class="preview-header">
+                <div class="preview-hero">
+                  @if (resume.personal.photoDataUrl) {
+                    <div class="preview-photo"><img [src]="resume.personal.photoDataUrl" alt="Profile photo" /></div>
+                  }
+                  <div>
+                    <h2>{{ fullName || 'Your name here' }}</h2>
+                    <p class="role">{{ resume.personal.role || 'Add a role title' }}</p>
+                  </div>
+                </div>
+              </header>
+            }
+
+            <section class="resume-card" [class.first-page]="pageIndex === 0">
+              @if (pageIndex === 0) {
+                <div class="contact">
+                  <span>{{ resume.personal.email || 'email@example.com' }}</span>
+                  <span>{{ resume.personal.phone || '+00 00000 00000' }}</span>
+                  <span>{{ resume.personal.location || 'Location' }}</span>
+                  <span>{{ resume.personal.linkedin || 'LinkedIn' }}</span>
+                  <span>{{ resume.personal.github || 'GitHub' }}</span>
+                </div>
+              }
+
+              @for (section of page.sections; track section) {
+                <section class="preview-section">
+                  <h3>{{ sectionLabels[section] }}</h3>
+                  @switch (section) {
+                    @case ('personal') {
+                      <p>{{ resume.personal.role || 'Add a professional title and contact details above.' }}</p>
+                    }
+                    @case ('summary') {
+                      <p>{{ resume.summary || 'Write a short summary of your experience and focus areas.' }}</p>
+                    }
+                    @case ('experience') {
+                      @for (item of resume.experience; track item) {
+                        <div class="preview-entry">
+                          <div class="row"><strong>{{ item.position }}</strong><span>{{ item.period }}</span></div>
+                          <p class="muted">{{ item.company }}</p>
+                          <p>{{ item.highlights }}</p>
+                        </div>
+                      }
+                    }
+                    @case ('projects') {
+                      @for (item of resume.projects; track item) {
+                        <div class="preview-entry">
+                          <div class="row"><strong>{{ item.name || 'Project name' }}</strong><span>{{ item.link }}</span></div>
+                          <p>{{ item.description || 'Add a short description of the project.' }}</p>
+                          <p class="muted">{{ item.technologiesUsed || 'Technologies used' }}</p>
+                        </div>
+                      }
+                    }
+                    @case ('education') {
+                      @for (item of resume.education; track item) {
+                        <div class="preview-entry">
+                          <div class="row"><strong>{{ item.degree }}</strong><span>{{ item.year }}</span></div>
+                          <p class="muted">{{ item.school }}</p>
+                        </div>
+                      }
+                    }
+                    @case ('skills') {
+                      <div class="chips">
+                        @for (skill of skillList; track skill) {
+                          <span class="chip">{{ skill }}</span>
+                        } @empty {
+                          <span class="chip ghost-chip">Add skills</span>
+                        }
+                      </div>
+                    }
+                  }
+                </section>
+              }
+            </section>
+          </section>
+        }
+      } @else {
+        <section class="preview-page">
+          <section class="resume-card split">
+            <div class="resume-split">
+              <aside class="resume-sidebar">
+                <div class="sidebar-block hero">
+                  @if (resume.personal.photoDataUrl) {
+                    <div class="preview-photo large"><img [src]="resume.personal.photoDataUrl" alt="Profile photo" /></div>
+                  }
+                  <h2>{{ fullName || 'Your name here' }}</h2>
+                  <p class="role">{{ resume.personal.role || 'Add a role title' }}</p>
+                </div>
+                <div class="sidebar-block">
+                  <h3>Contact</h3>
+                  <div class="sidebar-list">
+                    <span>{{ resume.personal.email || 'email@example.com' }}</span>
+                    <span>{{ resume.personal.phone || '+00 00000 00000' }}</span>
+                    <span>{{ resume.personal.location || 'Location' }}</span>
+                    <span>{{ resume.personal.linkedin || 'LinkedIn' }}</span>
+                    <span>{{ resume.personal.github || 'GitHub' }}</span>
+                  </div>
+                </div>
+                <div class="sidebar-block">
+                  <h3>Skills</h3>
+                  <div class="chips">
+                    @for (skill of skillList; track skill) {
+                      <span class="chip">{{ skill }}</span>
+                    } @empty {
+                      <span class="chip ghost-chip">Add skills</span>
+                    }
+                  </div>
+                </div>
+                @if (resume.education.length) {
+                  <div class="sidebar-block">
+                    <h3>Education</h3>
+                    @for (item of resume.education; track item) {
+                      <div class="preview-entry">
+                        <strong>{{ item.degree || 'Degree' }}</strong>
+                        <p class="muted">{{ item.school || 'School name' }} - {{ item.year || 'Year' }}</p>
+                      </div>
+                    }
+                  </div>
+                }
+              </aside>
+              <section class="resume-main">
+                <section class="preview-section"><h3>Summary</h3><p>{{ resume.summary || 'Write a short summary of your experience and focus areas.' }}</p></section>
+                <section class="preview-section">
+                  <h3>Experience</h3>
+                  @for (item of resume.experience; track item) {
+                    <div class="preview-entry">
+                      <div class="row"><strong>{{ item.position }}</strong><span>{{ item.period }}</span></div>
+                      <p class="muted">{{ item.company }}</p>
+                      <p>{{ item.highlights }}</p>
+                    </div>
+                  }
+                </section>
+                <section class="preview-section">
+                  <h3>Projects</h3>
+                  @for (item of resume.projects; track item) {
+                    <div class="preview-entry">
+                      <div class="row"><strong>{{ item.name || 'Project name' }}</strong><span>{{ item.link }}</span></div>
+                      <p>{{ item.description || 'Add a short description of the project.' }}</p>
+                      <p class="muted">{{ item.technologiesUsed || 'Technologies used' }}</p>
+                    </div>
+                  }
+                </section>
+              </section>
+            </div>
+          </section>
+        </section>
+      }
+    </div>
+  </aside>
+</main>
