@@ -26,6 +26,7 @@ import {
 } from '../models/resume.models';
 import { ResumeStorageService } from './resume-storage.service';
 import { AuthService } from './auth.service';
+import { environment } from '../../environments/environment';
 
 const STORAGE_KEY = 'br-resume-state';
 
@@ -36,7 +37,7 @@ export class ResumeStateService {
   private readonly resumeStorage = inject(ResumeStorageService);
   private readonly auth = inject(AuthService);
   protected readonly router = inject(Router);
-  private readonly apiBaseUrl = this.resolveApiBaseUrl();
+  private readonly apiBaseUrl = environment.apiUrl;
   private readonly workspaceApiUrl = this.apiBaseUrl ? `${this.apiBaseUrl}/api/workspace` : '/api/workspace';
 
   public readonly title = 'BUILD YOUR RESUME';
@@ -1025,19 +1026,6 @@ export class ResumeStateService {
     return typeof crypto !== 'undefined' && 'randomUUID' in crypto
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  }
-
-  private resolveApiBaseUrl(): string {
-    if (!this.browser) {
-      return '';
-    }
-
-    const { hostname, origin } = window.location;
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://localhost:5000';
-    }
-
-    return origin;
   }
 
   private normalizeImportedState(raw: unknown): ResumeState {

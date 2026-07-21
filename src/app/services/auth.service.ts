@@ -2,6 +2,7 @@ import { isPlatformBrowser } from '@angular/common';
 import { Injectable, inject, PLATFORM_ID, signal } from '@angular/core';
 
 import { AuthMode, UserSession } from '../models/resume.models';
+import { environment } from '../../environments/environment';
 
 type AuthResponse = {
   token: string;
@@ -24,7 +25,7 @@ const TOKEN_KEY = 'br-resume-token';
 export class AuthService {
   private readonly platformId = inject(PLATFORM_ID);
   private readonly browser = isPlatformBrowser(this.platformId);
-  private readonly apiBaseUrl = this.resolveApiBaseUrl();
+  private readonly apiBaseUrl = environment.apiUrl;
   private readonly authApiUrl = this.apiBaseUrl ? `${this.apiBaseUrl}/api/auth` : '/api/auth';
 
   public readonly loginUsername = signal('');
@@ -226,18 +227,5 @@ export class AuthService {
       .filter(Boolean)
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
       .join(' ') || username;
-  }
-
-  private resolveApiBaseUrl(): string {
-    if (!this.browser) {
-      return '';
-    }
-
-    const { hostname, origin } = window.location;
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://localhost:5000';
-    }
-
-    return origin;
   }
 }

@@ -7,6 +7,7 @@ import {
   UserSession,
   WorkspaceState,
 } from '../models/resume.models';
+import { environment } from '../../environments/environment';
 
 const USERS_KEY = 'br-resume-users';
 const SESSION_KEY = 'br-resume-session';
@@ -17,7 +18,7 @@ const TOKEN_KEY = 'br-resume-token';
 export class ResumeStorageService {
   private readonly platformId = inject(PLATFORM_ID);
   private readonly browser = isPlatformBrowser(this.platformId);
-  private readonly apiBaseUrl = this.resolveApiBaseUrl();
+  private readonly apiBaseUrl = environment.apiUrl;
   private readonly workspaceApiUrl = this.apiBaseUrl ? `${this.apiBaseUrl}/api/workspace` : '/api/workspace';
   private readonly syncReadyPromise: Promise<void>;
 
@@ -195,19 +196,6 @@ export class ResumeStorageService {
     return typeof crypto !== 'undefined' && 'randomUUID' in crypto
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  }
-
-  private resolveApiBaseUrl(): string {
-    if (!this.browser) {
-      return '';
-    }
-
-    const { hostname, origin } = window.location;
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://localhost:5000';
-    }
-
-    return origin;
   }
 
   private async pushWorkspaceToBackend(state: WorkspaceState): Promise<void> {
